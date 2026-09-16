@@ -86,7 +86,31 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
 #startView .logo{font-size:clamp(44px,13vw,70px)}
 #startView .btn{pointer-events:auto;min-width:220px}
 #startView .card{pointer-events:auto}
+.st-btns{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:32px}
 .start-note{font-size:12px;color:#fff;font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.5);margin-top:4px}
+
+/* ---- PCの横長画面：ロゴは左の帯、名前とボタンは右の帯へ（resize() が html.wide と --bandL/--bandR を付ける） ---- */
+html.wide #startView{padding:0}
+html.wide #startView .logo,
+html.wide #titleView .home-top{
+  position:fixed;left:0;width:var(--bandL);top:0;bottom:calc(56px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px;
+}
+html.wide #startView .logo,html.wide #titleView .logo{font-size:clamp(30px,calc(var(--bandL) / 6),54px)}
+html.wide #startView .st-btns,
+html.wide #titleView .home-bottom{
+  position:fixed;left:var(--bandR);right:0;top:0;bottom:calc(56px + env(safe-area-inset-bottom));
+  margin:0;padding:0 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+}
+html.wide #startView .st-btns{gap:14px}
+html.wide .start-note{color:#594236;text-shadow:none;line-height:1.6}
+html.wide #startView .btn{min-width:0;width:min(220px,100%);white-space:nowrap;padding-left:10px;padding-right:10px}
+html.wide #startView .btn.go{font-size:clamp(17px,calc(var(--bandL) / 13),23px)}
+html.wide #startView .btn.sub{font-size:clamp(12px,calc(var(--bandL) / 19),15px)}
+html.wide #titleView .row{flex-direction:column;align-items:stretch;width:min(200px,100%)}
+html.wide #titleView .btn.go{padding:12px 20px;font-size:clamp(17px,calc(var(--bandL) / 13),21px);white-space:nowrap}
+html.wide .petname{max-width:100%}
+html.wide #titleView .pettitle{color:#594236;text-shadow:0 1px 0 rgba(255,255,255,.7)}
 
 /* ---- そだてる画面 ---- */
 #evoView .card{pointer-events:auto;max-height:86vh;overflow:auto}
@@ -313,10 +337,11 @@ body.cinema #adbar, body.cinema #mute{display:none}
 
 <div class="overlay" id="startView">
   <div class="logo">ぽよん<br>ダンジョン<small>POYON DUNGEON</small></div>
-  <div style="height:18px"></div>
-  <button class="btn go" id="stContinue">▶　つづきから</button>
-  <button class="btn sub" id="stNew">さいしょから</button>
-  <div class="start-note" id="stNote"></div>
+  <div class="st-btns">
+    <button class="btn go" id="stContinue">▶　つづきから</button>
+    <button class="btn sub" id="stNew">さいしょから</button>
+    <div class="start-note" id="stNote"></div>
+  </div>
 </div>
 
 <div class="overlay hide" id="restartView">
@@ -723,9 +748,17 @@ function adHeight(){ const el = document.getElementById("adbar"); return el ? el
 function resize(){
   dpr = Math.min(2, window.devicePixelRatio || 1);
   const cw = window.innerWidth, ch = Math.max(240, window.innerHeight - adHeight());
-  scale = Math.min(cw / W, ch / BAND);
+  // PCの横長画面：左右に帯を置き、そこへロゴやボタンを逃がす（地面より下に並べる余白が無いため）。
+  // スマホ縦など横長でない画面は、これまでどおり（side = 0）
+  const wide = cw / ch >= 1.25 && cw >= 700;
+  const side = wide ? Math.min(340, Math.max(230, Math.round(cw * 0.2))) : 0;
+  scale = Math.min((cw - side * 2) / W, ch / BAND);
   H = ch / scale;
   offX = (cw - W * scale) / 2;
+  const rs = document.documentElement.style;
+  document.documentElement.classList.toggle("wide", wide);
+  rs.setProperty("--bandL", Math.round(offX) + "px");
+  rs.setProperty("--bandR", Math.round(offX + W * scale) + "px");
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
   cv.style.width = cw + "px"; cv.style.height = ch + "px";
   GY = Math.max(-CEIL, Math.round(H * 0.6));
