@@ -964,7 +964,10 @@ function drawHUD(run){
   ctx.textBaseline = "top";
   ctx.textAlign = roomy ? "center" : "left";
   const hx = roomy ? W / 2 : 12;
-  label(`地下 ${floorOf(m)} 階`, hx, y, roomy ? 34 : 20, "#5B4A86");
+  // 階層が上がった瞬間は、この表示自体を大きく金色にして知らせる
+  // （別の場所に文字を出すと、HUDや遊ぶ帯と重なって読みにくくなる）
+  const fl = Math.max(0, Math.min(1, game.floorFlash));
+  label(`地下 ${floorOf(m)} 階`, hx, y - fl * 4, (roomy ? 34 : 20) * (1 + 0.3 * fl), fl > 0.02 ? "#C98016" : "#5B4A86");
   label(`${Math.floor(m)} m`, hx, y + (roomy ? 42 : 24), roomy ? 20 : 13, "#7A68A8");
   if(game.bonus > 0){
     label(`リズム ＋${game.bonus}`, hx, y + (roomy ? 70 : 40), roomy ? 16 : 12, "#C98016");
@@ -978,12 +981,6 @@ function drawHUD(run){
     ctx.textAlign = "center";
     const k = Math.min(1, game.combo / 20);
     label(`${game.combo} コンボ`, W / 2, bandTop + 38, 22 + k * 8, "#FF7A9C");
-  }
-  if(game.floorFlash > 0){
-    ctx.globalAlpha = Math.min(1, game.floorFlash * 2);
-    ctx.textAlign = "center";
-    label(`地下 ${game.lastFloor} 階`, W / 2, bandTop + 60, 30, "#5B4A86");
-    ctx.globalAlpha = 1;
   }
 }
 
