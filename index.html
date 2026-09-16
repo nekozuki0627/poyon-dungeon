@@ -414,7 +414,7 @@ const IMG = {};
 function loadImg(key, file){ const im = new Image(); im.src = "assets/" + file; IMG[key] = im; }
 for(let i = 1; i <= 9; i++) loadImg("s" + i, "slime_0" + i + ".png");
 loadImg("crystal", "prop_01.png"); loadImg("mushroom", "prop_02.png"); loadImg("bat", "prop_03.png");
-loadImg("spikes",  "prop_04.png"); loadImg("sign",     "prop_05.png"); loadImg("chest", "prop_06.png");
+loadImg("spikes",  "prop_04.png"); loadImg("spike1", "spike_1.png"); loadImg("sign",     "prop_05.png"); loadImg("chest", "prop_06.png");
 const ready = im => im && im.complete && im.naturalWidth > 0;
 
 // 中心x・接地y・高さを指定して絵を置く
@@ -453,18 +453,20 @@ function drawBackground(cam){
   ctx.restore();
 
   // 光るクリスタルとキノコ（洞窟を「暗い」ではなく「ファンタジー」に見せる）
-  const sp = 210, par = 0.55, base = cam * par;
+  // 飾りは「壁の模様」として上のほうにだけ置く。
+  // 地面に置くと障害物と見分けがつかなくなるため、地面には一切置かない。
+  const sp = 190, par = 0.5, base = cam * par;
   for(let i = Math.floor(base / sp) - 1; i < Math.floor((base + W) / sp) + 2; i++){
-    const x = i * sp - base + 70 + hash(i) * 60;
+    const x = i * sp - base + 60 + hash(i) * 50;
     const kind = hash(i * 3.7) < .5;
-    const y = kind ? GY : bandTop + 6 + hash(i * 5.1) * 26;
-    const fl = .82 + .18 * Math.sin(game.time * 2.2 + i);
-    const glow = ctx.createRadialGradient(x, y - 14, 2, x, y - 14, 74 * fl);
-    glow.addColorStop(0, kind ? "rgba(140,240,255,.34)" : "rgba(255,170,210,.30)");
+    const y = bandTop + 34 + hash(i * 5.1) * 46;      // 壁の上のほうだけ
+    const fl = .8 + .2 * Math.sin(game.time * 2.2 + i);
+    const glow = ctx.createRadialGradient(x, y - 10, 2, x, y - 10, 62 * fl);
+    glow.addColorStop(0, kind ? "rgba(150,240,255,.26)" : "rgba(255,180,215,.22)");
     glow.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = glow; ctx.fillRect(x - 80, y - 94, 160, 160);
-    if(kind) put(IMG.crystal, x, y + 2, 34 + hash(i * 2.2) * 12, .95);
-    else     put(IMG.mushroom, x, y + 26, 26 + hash(i * 1.4) * 8, .9);
+    ctx.fillStyle = glow; ctx.fillRect(x - 70, y - 80, 140, 140);
+    if(kind) put(IMG.crystal, x, y + 2, 22 + hash(i * 2.2) * 7, .45);
+    else     put(IMG.mushroom, x, y + 14, 18 + hash(i * 1.4) * 5, .45);
   }
 
   // 天井の岩
@@ -572,11 +574,8 @@ function drawObstacles(run){
     if(o.k === "spike"){
       const n = Math.max(1, Math.round(o.w / 27)), each = o.w / n;
       for(let i = 0; i < n; i++){
-        // 三本セットの絵から一本ぶんだけ切り出して並べる
-        if(ready(IMG.spikes)){
-          const sw = IMG.spikes.naturalWidth / 3;
-          ctx.drawImage(IMG.spikes, sw * 0.5, 0, sw, IMG.spikes.naturalHeight,
-                        x + i * each, GY - 26, each, 28);
+        if(ready(IMG.spike1)){
+          put(IMG.spike1, x + i * each + each / 2, GY + 2, 28);
         }else{
           ctx.fillStyle = "#FF5A73";
           ctx.beginPath(); ctx.moveTo(x + i * each, GY); ctx.lineTo(x + i * each + each / 2, GY - 22);
@@ -596,12 +595,7 @@ function drawObstacles(run){
       // 下向きのトゲ（絵を上下ひっくり返して使う）
       const n = Math.max(1, Math.round(o.w / 22)), each = o.w / n;
       ctx.save(); ctx.translate(0, bottom * 2); ctx.scale(1, -1);
-      for(let i = 0; i < n; i++){
-        if(ready(IMG.spikes)){
-          const sw = IMG.spikes.naturalWidth / 3;
-          ctx.drawImage(IMG.spikes, sw * 0.5, 0, sw, IMG.spikes.naturalHeight, x + i * each, bottom - 20, each, 22);
-        }
-      }
+      for(let i = 0; i < n; i++) put(IMG.spike1, x + i * each + each / 2, bottom + 1, 22);
       ctx.restore();
     }else if(o.k === "bat"){
       const by = GY + o.y + Math.sin(o.x * 0.05) * 6;
@@ -633,18 +627,32 @@ function drawSlime(run){
   if(game.mode === "dead") return;
   const x = PX, baseY = GY + P.y + R;
 
+  // 地面にいる間は「ぽよんぽよん」と跳ねて見せる。
+  // 当たり判定は動かさない（本当に跳ばせるとトゲを勝手に飛び越えてしまうため）。
+  // 跳ねる高さはトゲ（22px）を越えて見えない範囲に抑える。
+  let hop = 0, sx = 1, sy = 1;
+  if(P.onGround && !P.fallen && game.squashT <= 0){
+    const s = Math.abs(Math.sin(game.time / 0.34 * Math.PI));
+    hop = -s * 9;
+    sx = 1 + (1 - s) * 0.17;   // 着地の瞬間は横に潰れる
+    sy = 1 - (1 - s) * 0.17;
+  }
+
   if(!P.fallen){
-    const hgt = Math.max(0, -P.y - R);
+    const hgt = Math.max(0, -P.y - R) - hop;
     ctx.fillStyle = `rgba(89,66,54,${0.26 * Math.max(0.15, 1 - hgt / 130)})`;
     ctx.beginPath(); ctx.ellipse(x, GY + 3, R * (1 - Math.min(0.5, hgt / 240)), 3.5, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   const im = slimePose(P);
   const key = Object.keys(IMG).find(k => IMG[k] === im);
-  const h = POSE_H[key] || 40;
-  if(!put(im, x, baseY + 3, h)){
+  const h = (POSE_H[key] || 40);
+  if(ready(im)){
+    const w = im.naturalWidth / im.naturalHeight * h;
+    ctx.drawImage(im, x - w * sx / 2, baseY + 3 + hop - h * sy, w * sx, h * sy);
+  }else{
     ctx.fillStyle = COL.mint;
-    ctx.beginPath(); ctx.ellipse(x, baseY - R, R, R, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, baseY - R + hop, R, R, 0, 0, Math.PI * 2); ctx.fill();
   }
 }
 
