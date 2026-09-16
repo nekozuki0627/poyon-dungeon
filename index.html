@@ -209,6 +209,32 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
   color:rgba(255,255,255,.75);background:transparent;border:1px solid rgba(255,255,255,.35);
   border-radius:2px;box-shadow:none;
 }
+/* おかえり：暗い映画調ではなく、明るい小屋で「持ってきたよ！」 */
+.talk-gems{display:none}
+#storyView.talk .nv-bg{background:url("assets/hut_bg.png") center 62%/cover}
+#storyView.talk .nv-bg::after{background:radial-gradient(90% 60% at 50% 55%, rgba(255,236,190,.35), rgba(255,236,190,0) 70%)}
+#storyView.talk .nv-grain, #storyView.talk .nv-bar{display:none}
+#storyView.talk .nv-no{top:max(18px,env(safe-area-inset-top));font-family:inherit;font-size:20px;font-weight:900;letter-spacing:.2em;
+  color:#fff;text-shadow:0 2px 0 #594236,0 0 10px rgba(89,66,54,.5)}
+#storyView.talk #nvChar{bottom:calc(210px + env(safe-area-inset-bottom));filter:drop-shadow(0 8px 6px rgba(89,66,54,.35))}
+#storyView.talk .nv-box{bottom:calc(46px + env(safe-area-inset-bottom));padding:0 16px;background:none}
+#storyView.talk .nv-text{
+  font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI",sans-serif;font-weight:800;font-size:16px;line-height:1.75;
+  color:#594236;text-shadow:none;letter-spacing:.02em;text-align:left;min-height:5.4em;
+  background:rgba(255,251,242,.96);border:3px solid #594236;border-radius:18px;padding:14px 16px 12px;
+  box-shadow:0 6px 0 rgba(89,66,54,.3);
+}
+#storyView.talk .nv-next{color:#B09A78}
+#storyView.talk .talk-gems{
+  display:block;position:fixed;left:0;right:0;text-align:center;z-index:5;
+  top:calc(max(18px,env(safe-area-inset-top)) + 40px);
+  font-size:30px;font-weight:900;color:#2E7C9E;
+  text-shadow:0 3px 0 #fff,0 -1px 0 #fff,2px 0 0 #fff,-2px 0 0 #fff,0 0 14px rgba(160,230,255,.9);
+  animation:gemPop .9s cubic-bezier(.2,1.6,.4,1) both;
+}
+#storyView.talk .talk-gems.hide{display:none}
+@keyframes gemPop{0%{transform:scale(.2) translateY(30px);opacity:0}100%{transform:none;opacity:1}}
+#storyView.talk #nvMini{display:none}
 /* 読んでいる間は、広告も音のボタンも引っ込める */
 body.cinema #adbar, body.cinema #mute{display:none}
 .st-lock{font-size:13px;color:#8A79B5;font-weight:800;line-height:1.8;text-align:center;margin-top:6px}
@@ -382,6 +408,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
     <div class="nv-cn" id="nvCn"></div>
     <div class="nv-ct" id="nvCt"></div>
   </div>
+  <div class="talk-gems hide" id="talkGems"></div>
   <button class="btn nv-choice hide" id="stChoice">あの子が不幸になるなんて、ありえない</button>
   <button class="btn nv-close hide" id="stClose">とじる</button>
 </div>
@@ -1411,11 +1438,37 @@ const NV_BG = {
 /* 読んでいる間だけ流す、静かな和音。ゆっくり変わるだけ（遊ぶときの曲とは別もの） */
 let stTimer = null;
 const SAD = [[9, 12, 16], [5, 9, 12], [0, 4, 7], [7, 11, 14]];   // Am → F → C → G
-function storyMusic(on){
+/* 章の気分で曲を変える
+   bright＝はじまりの章・おかえり（明るく、めでたく。分散和音と鈴）
+   bitter＝第四章（ほろ苦い）／sad＝第五章（静かな和音だけ）／dawn＝救いの章（夜明け） */
+const MOOD = {
+  bright: { ch: [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]], sp: 0.26, up: 12, vol: 0.05, bell: true },
+  bitter: { ch: [[9, 12, 16], [5, 9, 12], [0, 4, 7], [7, 11, 14]], sp: 0.42, up: 0,  vol: 0.04, bell: false },
+  dawn:   { ch: [[5, 9, 12], [0, 4, 7], [7, 11, 14], [0, 4, 12]], sp: 0.36, up: 12, vol: 0.045, bell: true },
+};
+const ARP = [0, 1, 2, 1, 2, 1, 0, 2];
+function storyMusic(on, mood){
   clearInterval(stTimer); stTimer = null;
   if(!on) return;
   if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; } }
   if(actx.state === "suspended") actx.resume();
+  const M = MOOD[mood];
+  if(M){
+    let j = 0;
+    const tick = () => {
+      if(game.muted || !actx) return;
+      const t = actx.currentTime + 0.03, bar = Math.floor(j / 8) % 4, k = j % 8, c = M.ch[bar];
+      if(k === 0){
+        for(const n of c) at(HZ(n - 12), t, M.sp * 8, "sine", M.vol * 0.7, { attack: 0.25 });
+        at(HZ(c[0] - 24), t, M.sp * 4, "triangle", M.vol * 1.3);
+        if(M.bell) at(HZ(c[2] + 24), t, 0.7, "sine", M.vol * 0.6, { echo: true });   // きらっと鈴
+      }
+      at(HZ(c[ARP[k]] + M.up), t, M.sp * 1.7, "triangle", M.vol, { echo: true, attack: 0.01 });
+      j++;
+    };
+    tick(); stTimer = setInterval(tick, M.sp * 1000);
+    return;
+  }
   let i = 0;
   const play = () => {
     if(game.muted || !actx) return;
@@ -1488,7 +1541,7 @@ function openStory(key, n){
   $("nvBg").style.setProperty("--bg1", bg[0]);
   $("nvBg").style.setProperty("--bg2", bg[1]);
   document.body.classList.add("cinema");
-  storyMusic(true);
+  storyMusic(true, n >= 1 && n <= 3 ? "bright" : n === 4 ? "bitter" : n === 0 ? "dawn" : "sad");
   $("storyView").classList.remove("hide");
   sceneReset();
   sceneShow("a");
@@ -1531,7 +1584,7 @@ function nvStand(){
     NV.alpha += (NV.want - NV.alpha) * 0.04;
     g.clearRect(0, 0, size, size);
     g.globalAlpha = Math.max(0, Math.min(1, NV.alpha));
-    g.filter = "saturate(.78) brightness(.86) contrast(1.05)";   // 場の色になじませる
+    g.filter = NV.n < 0 ? "none" : "saturate(.78) brightness(.86) contrast(1.05)";   // 物語のときだけ場の色になじませる
     const k = Math.abs(Math.sin(t / 0.95 * Math.PI));
     drawCreature(g, { line, stage }, size / 2, size * 0.95 - k * 3, size * 0.40,
                  { im: IMG.s1, t, sx: 1 + (1 - k) * 0.05, sy: 1 - (1 - k) * 0.05 });
@@ -1583,6 +1636,7 @@ function nvAdvance(){
 }
 function closeStory(){
   clearInterval(NV.typing); cancelAnimationFrame(NV.raf); storyMusic(false);
+  $("storyView").classList.remove("talk");
   document.body.classList.remove("cinema");
   game.ui = null; $("storyView").classList.add("hide");
   if(game.mode === "title") refreshHome();
@@ -1594,38 +1648,99 @@ const hasNewStory = () => SLINES.some(k => story[k] >= 5 && !rescue[k]);
 
 /* ---- おもいで（読み返し） ---- */
 /* ---- おかえりの ひとこと ----
-   帰ってきたときに、たまに出る。章ほど重くしない（1文だけ・タイトルなし）。
-   その日の成果と、いまの姿で言うことが変わる。 */
+   おうちに戻ったときに出る。明るい小屋で、その子が「持って帰ってきたよ」と見せにくる。
+   台詞は系統×段階で変わる（スライム＝ぷるぷる／けもの＝わん・しっぽ／ヒトガタ＝だんだん話せるようになる）。
+   {n}＝名前、{g}＝持ち帰ったクリスタルの数 */
+const VOICE = {
+  base: [
+    "ぷるん、ぷるん！ {n}が、光る石を{g}こ、ころころ転がしてきた。",
+    "戸のすきまから、{n}がぬるんと帰ってきた。頭の上に、クリスタルが{g}このっている。",
+  ],
+  slime: [null, null,
+    ["{n}が、つやつやの体からクリスタルを{g}こ、ぷるんっと出した。どうだ、と言わんばかり。",
+     "おでこの宝石をぴかっと光らせて、{n}のご帰還。おみやげは{g}こ！"],
+    ["体の中で、クリスタルがきらきら回っている。{n}、今日は{g}こも持ってきた！",
+     "しずくをぴちょんと飛ばして、{n}が跳ねてきた。数えてみたら{g}こ。"],
+    ["ずしん、ずしん。だいおう{n}のお帰りだ！ 王冠の上に、戦利品が{g}こ積んである。",
+     "{n}が、戸の前にクリスタルを{g}こ、うやうやしく並べた。王さまからの贈りもの。"],
+    ["マントをひるがえして、{n}キングが凱旋！ 「くるしゅうない」と言いたげに、クリスタルを{g}こ献上してくる。",
+     "金色の光をまとって、{n}キングのお帰り。宝物庫が{g}こぶん、また豊かになった。"],
+  ],
+  beast: [null, null,
+    ["耳をぴこぴこさせて、{n}が駆けこんできた。口にくわえたクリスタル、{g}こ！",
+     "「わふっ」。{n}が足もとにクリスタルを{g}こ落として、ほめて！の顔。"],
+    ["しっぽをぶんぶん振りながら、{n}が飛びついてきた。背中の袋に、クリスタルが{g}こ。",
+     "しっぽで床をぱたぱた。{n}が、とってきたクリスタル{g}こを鼻で押してくる。"],
+    ["{n}が、狩りの戦利品みたいにクリスタルを{g}こ並べた。それから手のにおいを嗅いで、しっぽを一回。",
+     "たてがみをぶるっと振って、{n}のお帰り。牙でくわえてきたクリスタル、{g}こ。"],
+    ["遠吠えがひとつ。{n}が風みたいに帰ってきた。月の色のクリスタルを{g}こ、得意げに並べる。",
+     "大きな体を小さく伏せて、{n}が鼻先でクリスタルを{g}こ差しだしてきた。「ただいま」の顔。"],
+  ],
+  human_m: [null, null,
+    ["小さな手で、{n}がクリスタルを{g}こ差しだしてきた。落とさないように、ぎゅっと握って。",
+     "{n}が両手いっぱいのクリスタルを見せにきた。指を折って……{g}こ！"],
+    ["「た、だ、い、ま！ きょうは、{g}こ！」 {n}が、指で数をつくって見せてくる。",
+     "本を小わきに、{n}のお帰り。「くりすたる、{g}こ。ぜんぶ、かぞえた」"],
+    ["「ただいま！ 今日の成果、{g}こ。ちゃんと数えたよ」 {n}が、ノートの正の字を見せてくる。",
+     "「見て見て、{g}こ！ 下の階で、光ってたやつ」 {n}が、ぶかぶかの袖をまくって笑う。"],
+    ["「ただいま。ほら、{g}こ。……べつに、ほめてほしいわけじゃないけど」 {n}が、ちらっとこっちを見る。",
+     "「おみやげ、{g}こ。重かったんだからな」 そう言いながら、{n}はうれしそうに胸を張った。"],
+  ],
+  human_f: [null, null,
+    ["小さな手で、{n}がクリスタルを{g}こ差しだしてきた。リボンがぴょこんと揺れる。",
+     "{n}が両手いっぱいのクリスタルを見せにきた。指を折って……{g}こ！"],
+    ["「た、だ、い、ま！ きょうは、{g}こ！」 {n}が、指で数をつくって首をかしげる。",
+     "本を抱えて、{n}のお帰り。「くりすたる、{g}こ。きれい、でしょ？」"],
+    ["「ただいまっ！ 今日はね、{g}こ見つけたの」 {n}が、くるっと回ってスカートをふわり。",
+     "「見て見て、{g}こ！ いちばんきれいなのは、あなたにあげる」 {n}がにこっと笑う。"],
+    ["「ただいま！ ねえ見て、{g}こも見つけたの。……えへへ、すごいでしょ？」",
+     "「おかえりって言って？ ……今日は{g}こ。がんばったんだから」 {n}が、手を後ろで組んでのぞきこんでくる。"],
+  ],
+};
+// 手ぶらで帰ってきたとき
+const VOICE_ZERO = {
+  base:    "{n}が、手ぶらで帰ってきた。でも、ぷるんぷるん跳ねて、ごきげんだ。",
+  slime:   "今日は手ぶら。でも{n}は、「ちゃんと帰ってきたよ」と、ぷるん、ぷるん。",
+  beast:   "手ぶらの{n}が、しっぽを振って飛びついてきた。帰ってきたことが、いちばんのおみやげ。",
+  human_m: "「……今日は、なにも取れなかった」 しょんぼりの{n}。でも、ちゃんと帰ってきた。それで十分。",
+  human_f: "「ごめんね、今日はなにもなかったの」 しょんぼりの{n}。帰ってきてくれて、それがいちばん。",
+};
+// その日の出来事で、もうひとこと
+function voiceExtra(r){
+  if(!r) return null;
+  if(r.isNew) return "いちばん深いところまで行ってきたらしい。{n}、すごいぞ！";
+  if(r.revived) return "ちょっと危なかったみたい。それでも、笑って帰ってきた。";
+  if(r.gems >= 15) return "床がきらきらでいっぱいだ！ 今夜はごちそうにしよう。";
+  return null;
+}
 function pickVoice(){
-  const r = game.lastRun, st = pet.stage, ln = pet.line, pool = [];
-  if(r){
-    if(r.isNew)      pool.push("いちばん深いところまで行った日。{n}は、しばらく震えていた。");
-    if(r.revived)    pool.push("一度ちからつきたはずの{n}が、平気な顔で戻ってきた。");
-    if(r.gems === 0) pool.push("手ぶらで帰ってきた{n}は、なぜか少し得意そうだった。",
-                               "何も持って帰れなかった日も、{n}はいつもどおり寄ってくる。");
-    if(r.gems >= 12) pool.push("{n}は運んだぶんを床に並べて、こっちの顔を見た。ほめる番らしい。",
-                               "数えきれないほど持って帰ってきた。{n}の体が、まだ少し光っている。");
-    if(r.m < 10)     pool.push("すぐに戻ってきた。{n}は、何事もなかったような顔をしている。");
-  }
-  pool.push("{n}が帰ってきた。まず、こっちの足もとにぶつかってくる。",
-            "土のにおいをつけたまま、{n}が戸を押して入ってきた。",
-            "{n}は、こっちが座るのを待ってから、となりに来た。");
-  if(ln.indexOf("human") === 0 && st >= 3) pool.push("{n}が言った。「おかえり」。まだ、水の音みたいな声で。");
-  if(ln === "beast" && st >= 3) pool.push("{n}は鼻を近づけて、こっちのにおいを確かめてから、しっぽを振った。");
-  if(ln === "slime" && st >= 4) pool.push("{n}は、戸に入りきらない体をめいっぱい小さくして、入ってきた。");
-  return pool[Math.floor(Math.random() * pool.length)];
+  const r = game.lastRun || { gems: 0 };
+  const key = pet.stage <= 1 ? "base" : pet.line;
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const lines = [];
+  if(r.gems <= 0) lines.push(VOICE_ZERO[key] || VOICE_ZERO.base);
+  else lines.push(pick(pet.stage <= 1 ? VOICE.base : VOICE[pet.line][pet.stage]));
+  const ex = voiceExtra(r);
+  if(ex) lines.push(ex);
+  return lines.map(x => x.replace(/\{n\}/g, pet.name).replace(/\{g\}/g, r.gems));
 }
 function openTalk(){
   game.ui = "story";
   NV.key = skey(pet.line); NV.n = -1; NV.i = 0; NV.alpha = 1; NV.want = 1; NV.lock = false;
   sceneReset();
-  NV.lines = [pickVoice().replace(/\{n\}/g, pet.name)];
-  $("stNo").textContent = "おかえり";
+  NV.lines = pickVoice();
+  $("stNo").textContent = "おかえり！";
   $("stChoice").classList.add("hide"); $("stClose").classList.add("hide");
   $("stText").textContent = ""; $("stNext").style.visibility = "hidden";
-  $("nvBg").style.setProperty("--bg1", NV_BG.home[0]);
-  $("nvBg").style.setProperty("--bg2", NV_BG.home[1]);
+  // 明るい小屋で。持って帰ってきたクリスタルを見せる
+  $("storyView").classList.add("talk");
+  const g = (game.lastRun && game.lastRun.gems) || 0;
+  const tg = $("talkGems");
+  tg.textContent = g > 0 ? `💎 ＋${g}` : "";
+  tg.classList.toggle("hide", g <= 0);
+  tg.style.animation = "none"; void tg.offsetWidth; tg.style.animation = "";
   document.body.classList.add("cinema");
+  storyMusic(true, "bright");
   $("storyView").classList.remove("hide");
   nvStand();
   nvLine();
