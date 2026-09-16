@@ -21,11 +21,12 @@ canvas{display:block;position:fixed;inset:0}
 
 .overlay{
   position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px;text-align:center;pointer-events:none;
+  padding:24px;padding-bottom:calc(24px + 56px + env(safe-area-inset-bottom));
+  text-align:center;pointer-events:none;
 }
 @media (max-aspect-ratio: 3/4){
   .overlay{justify-content:flex-start;padding-top:max(9vh, calc(env(safe-area-inset-top) + 40px))}
-  #titleView .howto{position:fixed;left:0;right:0;bottom:max(7vh,24px);padding:0 24px}
+  #titleView .howto{position:fixed;left:0;right:0;bottom:calc(max(5vh,16px) + 56px + env(safe-area-inset-bottom));padding:0 24px}
 }
 .logo{
   font-size:clamp(34px,10vw,58px);font-weight:900;letter-spacing:.04em;line-height:1.05;
@@ -59,6 +60,14 @@ canvas{display:block;position:fixed;inset:0}
 @keyframes pop{0%{transform:scale(.3)}100%{transform:scale(1)}}
 .r-gap{margin-top:8px;font-size:13px;color:var(--dim)}
 
+#adbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:4;
+  height:calc(56px + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  display:flex;align-items:center;justify-content:center;
+  background:#EDE4FF;border-top:3px solid #594236;
+  color:#9A8ABC;font-size:11px;font-weight:800;letter-spacing:.22em;
+}
 #mute{
   position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:50%;
   border:2px solid #594236;background:rgba(255,255,255,.8);color:var(--ink);font-size:20px;
@@ -99,6 +108,9 @@ canvas{display:block;position:fixed;inset:0}
 </div>
 
 <button id="mute" aria-label="音のオン・オフ">🔊</button>
+
+<!-- 画面下にいつも空けておく広告の場所。公開後にここへ広告を入れる -->
+<div id="adbar"><span>広告スペース</span></div>
 
 <script>
 "use strict";
@@ -274,9 +286,10 @@ const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 let dpr = 1, scale = 1, H = BAND, offX = 0, bandTop = 0, GY = 196;
 
+function adHeight(){ const el = document.getElementById("adbar"); return el ? el.offsetHeight : 56; }
 function resize(){
   dpr = Math.min(2, window.devicePixelRatio || 1);
-  const cw = window.innerWidth, ch = window.innerHeight;
+  const cw = window.innerWidth, ch = Math.max(240, window.innerHeight - adHeight());
   scale = Math.min(cw / W, ch / BAND);
   H = ch / scale;
   offX = (cw - W * scale) / 2;
@@ -469,8 +482,20 @@ function drawBackground(cam){
     else     put(IMG.mushroom, x, y + 14, 18 + hash(i * 1.4) * 5, .45);
   }
 
-  // 天井の岩
-  ctx.fillStyle = COL.rock; ctx.fillRect(0, 0, W, bandTop + 7);
+  // 天井。ここを岩で埋めておかないと、上から下りてくる障害物が
+  // 「宙に浮いた切り抜き」に見えてしまう
+  const cg = ctx.createLinearGradient(0, 0, 0, bandTop + 7);
+  cg.addColorStop(0, "#9C83D6"); cg.addColorStop(1, COL.rock);
+  ctx.fillStyle = cg; ctx.fillRect(0, 0, W, bandTop + 7);
+  ctx.fillStyle = "rgba(255,255,255,.07)";
+  const rp = 46, q0 = Math.floor(cam * 0.25 / rp);
+  for(let i = q0 - 1; i < q0 + Math.ceil(W / rp) + 2; i++){
+    for(let j = 0; j < Math.ceil((bandTop + 8) / rp); j++){
+      const cx2 = i * rp - cam * 0.25 + hash(i * 7 + j) * 26, cy2 = j * rp + hash(i + j * 13) * 26;
+      if(cy2 > bandTop) continue;
+      ctx.beginPath(); ctx.ellipse(cx2, cy2, 8 + hash(i + j) * 12, 5 + hash(i * j + 1) * 7, hash(j) * 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
   ctx.fillStyle = COL.rockDeep;
   const sr = 44, r0 = Math.floor(cam / sr);
   for(let i = r0 - 1; i < r0 + Math.ceil(W / sr) + 2; i++){
@@ -583,15 +608,21 @@ function drawObstacles(run){
         }
       }
     }else if(o.k === "ceil"){
-      // 壁と同じ色だと障害物に見えないので、はっきり濃い岩＋茶色の輪郭にする
+      // 天井から地続きに下りてきた岩に見せる（横線で切れて見えないよう、上は天井まで伸ばす）
       const bottom = GY - 44;
-      const g = ctx.createLinearGradient(0, bandTop, 0, bottom);
-      g.addColorStop(0, "#8E74C8"); g.addColorStop(1, "#6B51A0");
-      ctx.fillStyle = g; ctx.fillRect(x, bandTop, o.w, bottom - bandTop);
-      ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(x + 3, bandTop, 4, bottom - bandTop - 6);
+      const g = ctx.createLinearGradient(0, bandTop - 40, 0, bottom);
+      g.addColorStop(0, "#9C83D6"); g.addColorStop(1, "#6B51A0");
+      ctx.fillStyle = g; ctx.fillRect(x, bandTop - 40, o.w, bottom - bandTop + 40);
+      ctx.fillStyle = "rgba(255,255,255,.16)"; ctx.fillRect(x + 3, bandTop, 4, bottom - bandTop - 6);
+      // 上端に横線が出ると「切り抜きを貼った」ように見えるので、天井の岩に溶かす
+      const fade = ctx.createLinearGradient(0, bandTop - 42, 0, bandTop + 6);
+      fade.addColorStop(0, COL.rock); fade.addColorStop(1, "rgba(184,160,230,0)");
+      ctx.fillStyle = fade; ctx.fillRect(x - 2, bandTop - 42, o.w + 4, 48);
       ctx.strokeStyle = COL.line; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(x + 1.5, bandTop); ctx.lineTo(x + 1.5, bottom);
-      ctx.lineTo(x + o.w - 1.5, bottom); ctx.lineTo(x + o.w - 1.5, bandTop); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 1.5, bandTop + 4); ctx.lineTo(x + 1.5, bottom);
+      ctx.lineTo(x + o.w - 1.5, bottom); ctx.lineTo(x + o.w - 1.5, bandTop + 4); ctx.stroke();
+      // 足元に影を落として「どこにあるか」を地面の上でも分かるようにする
+      ctx.fillStyle = "rgba(89,66,54,.16)"; ctx.fillRect(x, GY - 4, o.w, 4);
       // 下向きのトゲ（絵を上下ひっくり返して使う）
       const n = Math.max(1, Math.round(o.w / 22)), each = o.w / n;
       ctx.save(); ctx.translate(0, bottom * 2); ctx.scale(1, -1);
@@ -618,9 +649,9 @@ function slimePose(P){
     if(P.vy <  130) return IMG.s4;
     return IMG.s5;
   }
-  return game.squashT > 0 ? IMG.s7 : IMG.s2;
+  return game.squashT > 0 ? IMG.s7 : IMG.s1;   // s2は足が生えているので使わない
 }
-const POSE_H = { s2:40, s3:54, s4:40, s5:44, s7:26, s9:38 };
+const POSE_H = { s1:40, s3:54, s4:40, s5:44, s7:26, s9:38 };
 
 function drawSlime(run){
   const P = run.P;
