@@ -1,37 +1,53 @@
 # -*- coding: utf-8 -*-
 """Geminiの「左右2コマ」の挿絵を2枚に分けて、縦長のJPGにする。
-   使い方: python split_scene.py 元画像 出力名   → assets/story/出力名_a.jpg, 出力名_b.jpg"""
+   使い方: python split_scene.py 元画像 出力名   → assets/story/出力名_a.jpg, 出力名_b.jpg
+   区切りは黒とは限らない（白や生成りの枠で来ることがある）ので、
+   「縦にまっすぐ同じ色が続く列」を区切りとみなす。"""
 import sys, os
-from PIL import Image
+from PIL import Image, ImageStat
 
 A = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "story")
 src, name = sys.argv[1], sys.argv[2]
 im = Image.open(src).convert("RGB")
 w, h = im.size
 px = im.load()
+y0, y1 = int(h * .08), int(h * .92)
 
-def dark_col(x):  # 列の暗さ（真っ黒な区切りを探す）
-    return sum(sum(px[x, y]) for y in range(0, h, 4))
+def col_var(x):
+    # 列の色のばらつき。区切りの列はほぼ一色
+    vals = [sum(px[x, y]) for y in range(y0, y1, 3)]
+    m = sum(vals) / len(vals)
+    return sum((v - m) ** 2 for v in vals) / len(vals)
 
-# 真ん中あたりで一番暗い列が区切り。そこから左右に黒い帯を広げる
-mid = min(range(int(w * .35), int(w * .65)), key=dark_col)
-limit = dark_col(mid) * 1.6 + h * 6
+mid = min(range(int(w * .35), int(w * .65)), key=col_var)
+base = col_var(mid)
+lim = max(base * 4, 400)
 l = mid
-while l > 0 and dark_col(l - 1) < limit: l -= 1
+while l > 0 and col_var(l - 1) < lim: l -= 1
 r = mid
-while r < w - 1 and dark_col(r + 1) < limit: r += 1
+while r < w - 1 and col_var(r + 1) < lim: r += 1
+print("区切り", l, r)
 
-def trim(box):
-    # まわりの黒い余白を落とす
-    x0, y0, x1, y1 = box
-    part = im.crop(box)
-    g = part.convert("L").point(lambda v: 255 if v > 28 else 0)
-    bb = g.getbbox() or (0, 0, part.width, part.height)
-    return part.crop(bb)
+def trim(part):
+    # 外側の枠（一色の帯）を落とす：各辺から、一色の行・列が続くあいだ削る
+    pp = part.load(); pw, ph = part.size
+    def flat_row(y):
+        v = [sum(pp[x, y]) for x in range(0, pw, 3)]; m = sum(v)/len(v); return sum((a-m)**2 for a in v)/len(v) < 400
+    def flat_col(x):
+        v = [sum(pp[x, y]) for y in range(0, ph, 3)]; m = sum(v)/len(v); return sum((a-m)**2 for a in v)/len(v) < 400
+    t = 0
+    while t < ph // 4 and flat_row(t): t += 1
+    b = ph - 1
+    while b > ph * 3 // 4 and flat_row(b): b -= 1
+    le = 0
+    while le < pw // 4 and flat_col(le): le += 1
+    ri = pw - 1
+    while ri > pw * 3 // 4 and flat_col(ri): ri -= 1
+    # 枠の内側の細い線も落とすため、少しだけ余分に削る
+    return part.crop((le + 3, t + 3, ri - 2, b - 2))
 
 for tag, box in (("a", (0, 0, l, h)), ("b", (r + 1, 0, w, h))):
-    p = trim(box)
-    # 縦長にそろえて、大きすぎれば縮める
+    p = trim(im.crop(box))
     if p.height > 1100:
         p = p.resize((int(p.width * 1100 / p.height), 1100), Image.LANCZOS)
     out = os.path.join(A, f"{name}_{tag}.jpg")
