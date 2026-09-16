@@ -139,10 +139,34 @@ const gapFor   = m => Math.max(0.55, 1.35 - m * 0.0011);
 /* リズム。潜るほど曲が速くなる。
    障害物の間隔は「これまでの最低間隔」を必ず満たしたうえで、八分音符の目に合わせる。
    （間隔は伸びる方向にしか動かないので、抜けられることの検証は保たれる） */
-const bpmFor  = m => Math.min(150, 120 + m * 0.035);
-const beatFor = m => 60 / bpmFor(m);
-const gridFor = m => beatFor(m) / 2;
-const gapBeat = m => Math.ceil(gapFor(m) / gridFor(m)) * gridFor(m);
+const BPM  = 128;
+const BEAT = 60 / BPM;          // 1拍
+const GRID = BEAT / 2;          // 八分音符。障害物はこの目にだけ置く
+// ジャンプしてから体が一番高くなるまでの時間。
+// 「障害物が来る瞬間」ではなく「跳ぶ瞬間」を拍に合わせたいので、この分だけ前倒しする
+const JUMP_LEAD = JV / G;
+
+// 走っている速さは進むほど上がる。x から x2 まで進むのにかかる時間
+function travelTime(x, x2){
+  let t = 0;
+  while(x < x2){
+    const step = Math.min(8, x2 - x);
+    t += step / speedFor(Math.max(0, x - PX) / PX_PER_M);
+    x += step;
+  }
+  return t;
+}
+// x から dt 秒ぶん進んだ先の位置
+function advanceBy(x, dt){
+  let t = 0;
+  while(t < dt){
+    const v = speedFor(Math.max(0, x - PX) / PX_PER_M);
+    const step = Math.min(8, (dt - t) * v);
+    if(step <= 0) break;
+    x += step; t += step / v;
+  }
+  return x;
+}
 const tierFor  = m => m < 90 ? 0 : m < 260 ? 1 : m < 520 ? 2 : 3;
 const reach    = v => (2 * JV / G) * v;   // 1回のジャンプで進む横の距離
 
@@ -187,18 +211,30 @@ const CEIL_BOTTOM = -70;
    --------------------------------------------------------- */
 function makeRun(opt = {}){
   return {
-    cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460,
+    cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0,
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
     ev: [],   // 画面側に伝える出来事（着地・ジャンプなど）
   };
 }
 
-function placeChunk(run, chunk, x0){
+// t0 を渡すと、まとまりの中の障害物も一つずつ拍に乗せる（本番用）。
+// t0 なしのときは素の間隔のまま置く（検証用。こちらの方が詰まっていて厳しい）
+function placeChunk(run, chunk, x0, t0){
   const v = run.fixedV ?? speedFor(x0 / PX_PER_M);
-  let end = x0;
+  const snap = (t0 != null);
+  let end = x0, tEnd = t0;
   chunk.items.forEach((it, i) => {
-    const x = i === 0 ? x0 : end + (it.t || 0) * v;
+    let x;
+    if(i === 0){ x = x0; }
+    else if(snap){
+      const want = tEnd + (it.t || 0);
+      const tx = Math.ceil((want - JUMP_LEAD) / GRID) * GRID + JUMP_LEAD;
+      x = advanceBy(end, tx - tEnd);
+      tEnd = tx;
+    }else{
+      x = end + (it.t || 0) * v;
+    }
     if(it.k === "pit"){
       const w = Math.round(it.wr * reach(v));
       run.pits.push({x0:x, x1:x + w}); end = x + w;
@@ -210,21 +246,29 @@ function placeChunk(run, chunk, x0){
       const s = SIZE[it.k];
       run.obs.push({k:"spike", x, w:s.w, h:s.h}); end = x + s.w;
     }
+    if(snap) tEnd += travelTime(x, end);
   });
+  run._tEnd = tEnd;
   return end;
 }
 
 function generate(run){
   const limit = run.cam + W + 400;
+  if(!run.tAt) run.tAt = travelTime(PX, run.nextX);   // 走り始めてから最初の障害物に着くまで
   while(run.nextX < limit){
     const m = run.nextX / PX_PER_M;
     const tier = tierFor(m);
     const pool = [];
     CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 3 : 1; for(let i=0;i<w;i++) pool.push(c); } });
     const chunk = pool[Math.floor(Math.random() * pool.length)];
-    const end = placeChunk(run, chunk, run.nextX);
-    const v = speedFor(m);
-    run.nextX = end + gapBeat(m) * v;
+    const end = placeChunk(run, chunk, run.nextX, run.tAt);
+    // 次の障害物は「跳ぶ瞬間が拍に乗る」位置に置く。
+    // 間隔はこれまでの最低値を必ず満たす方向（切り上げ）にしか動かさない
+    const tEnd  = run._tEnd;
+    const want  = tEnd + gapFor(m);
+    const snapped = Math.ceil((want - JUMP_LEAD) / GRID) * GRID + JUMP_LEAD;
+    run.nextX = advanceBy(end, snapped - tEnd);
+    run.tAt = snapped;
   }
   // 通り過ぎたものは捨てる
   const cut = run.cam - 100;
@@ -385,54 +429,86 @@ function noiseHit(t, vol, hp, dur){
   n.start(t);
 }
 
-/* 明るいポップの定番進行（ド→ソ→ラm→ファ）を4小節でまわす。
-   1小節＝8ステップ（八分音符）。 */
+/* 明るいポップの定番進行（ド→ソ→ラm→ファ）。
+   4小節では短すぎて飽きるので、16小節ひとまわり（約30秒）にしてある。
+   地下260mから裏の16小節に切り替わるので、通しで約1分ぶん。 */
 const ROOTS  = [0, 7, 9, 5];
 const CHORDS = [[0, 4, 7], [-1, 2, 7], [0, 4, 9], [0, 5, 9]];
-// メロディ。-1 は休み。4小節ぶん
+const BARS = 16;
+// 16小節ぶんのメロディ。-1 は休み
 const MELODY = [
   [16, -1, 19, -1, 21, -1, 19, -1],
   [16, -1, 14, -1, 16, -1, -1, -1],
   [21, -1, 19, -1, 16, -1, 14, -1],
   [12, -1, 14, -1, 16, -1, -1, -1],
+
+  [19, -1, 21, -1, 23, -1, 21, -1],
+  [19, -1, 16, -1, 19, -1, -1, -1],
+  [21, 23, 24, -1, 21, -1, 19, -1],
+  [16, -1, 19, -1, 21, -1, -1, -1],
+
+  [24, -1, 23, -1, 21, -1, 19, -1],
+  [21, -1, 19, -1, 16, -1, -1, -1],
+  [14, -1, 16, -1, 19, -1, 21, -1],
+  [19, -1, 16, -1, 14, -1, -1, -1],
+
+  [16, 19, 21, -1, 24, -1, 21, -1],
+  [23, -1, 21, -1, 19, -1, -1, -1],
+  [16, -1, 19, 21, 23, -1, 24, -1],
+  [21, -1, 19, -1, 16, -1, -1, -1],
 ];
-// 終盤だけ跳ねる裏メロ
+// 地下260mから。少し高く、跳ねる感じに
 const MELODY_B = [
   [28, -1, 26, -1, 24, -1, 26, -1],
   [28, -1, 31, -1, 28, 26, 24, -1],
   [26, -1, 24, -1, 21, -1, 24, -1],
   [26, 24, 21, -1, 19, -1, -1, -1],
+
+  [24, 26, 28, -1, 31, -1, 28, -1],
+  [26, -1, 24, -1, 26, -1, -1, -1],
+  [31, -1, 33, -1, 31, 28, 26, -1],
+  [28, -1, 26, -1, 24, -1, -1, -1],
+
+  [21, -1, 24, -1, 26, -1, 28, -1],
+  [26, -1, 24, -1, 21, -1, -1, -1],
+  [28, 31, 33, -1, 36, -1, 33, -1],
+  [31, -1, 28, -1, 26, -1, -1, -1],
+
+  [24, -1, 26, 28, 31, -1, 33, -1],
+  [31, -1, 28, -1, 26, -1, -1, -1],
+  [28, 26, 24, -1, 21, -1, 19, -1],
+  [21, -1, 24, -1, 28, -1, -1, -1],
 ];
 
 function playStep(i, t){
-  const bar = Math.floor(i / 8) % 4, k = i % 8;
-  const root = ROOTS[bar];
+  const bar = Math.floor(i / 8) % BARS, k = i % 8;
+  const root = ROOTS[bar % 4];
   const m = game.run ? game.run.cam / PX_PER_M : 0;
-  if(echo) echo.delayTime.value = gridFor(m);   // こだまを曲の速さに合わせる
+  if(echo) echo.delayTime.value = GRID;
 
   // ドラム
-  if(k === 0 || k === 4) at(58, t, 0.17, "sine", 0.3, { slide: 0.42 });        // キック
-  if(k === 4) noiseHit(t, 0.12, 1400, 0.16);                                    // スネア
-  noiseHit(t, k % 2 ? 0.045 : 0.03, 7000, 0.035);                               // ハイハット
+  if(k === 0 || k === 4) at(58, t, 0.17, "sine", 0.3, { slide: 0.42 });
+  if(k === 4) noiseHit(t, 0.12, 1400, 0.16);
+  noiseHit(t, k % 2 ? 0.045 : 0.03, 7000, 0.035);
+  // 4小節ごとの区切りにおかず（フィル）を入れて、同じところを回っている感じを消す
+  if(bar % 4 === 3 && k >= 6) noiseHit(t + GRID / 2, 0.1, 900, 0.1);
 
   // ベース
   if(k === 0 || k === 3 || k === 6) at(HZ(root - 24), t, 0.22, "triangle", 0.16);
 
-  // コード（裏拍で軽く刻む）
+  // コード
   if(k % 2 === 1){
-    for(const c of CHORDS[bar]) at(HZ(root + c + 12), t, 0.16, "square", 0.024, { attack: 0.004 });
+    for(const c of CHORDS[bar % 4]) at(HZ(root + c + 12), t, 0.16, "square", 0.024, { attack: 0.004 });
   }
 
   // メロディ
-  const deep = m > 260;
-  const line = deep ? MELODY_B[bar] : MELODY[bar];
+  const line = (m > 260 ? MELODY_B : MELODY)[bar];
   const n = line[k];
   if(n >= 0){
     at(HZ(n), t, 0.26, "triangle", 0.11, { echo: true, attack: 0.006 });
-    at(HZ(n + 12), t, 0.2, "sine", 0.035, { echo: true });                       // 上に薄く重ねて艶を出す
+    at(HZ(n + 12), t, 0.2, "sine", 0.035, { echo: true });
   }
-  // 小節あたまのきらめき
-  if(k === 0) at(HZ(root + 24), t, 0.5, "sine", 0.03, { echo: true, attack: 0.05 });
+  if(k === 0 && bar % 4 === 0) at(HZ(root + 24), t, 0.5, "sine", 0.03, { echo: true, attack: 0.05 });
 }
 function musicStart(){
   if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; } }
@@ -443,12 +519,10 @@ function musicStart(){
 function musicStop(){ MUSIC.on = false; clearInterval(MUSIC.timer); MUSIC.timer = null; }
 function musicSchedule(){
   if(!MUSIC.on || !actx) return;
-  const m = game.run ? game.run.cam / PX_PER_M : 0;
-  const grid = gridFor(m);
   while(MUSIC.next < actx.currentTime + 0.3){
     playStep(MUSIC.i, MUSIC.next);
     if(MUSIC.i % 2 === 0){ MUSIC.beats.push(MUSIC.next); if(MUSIC.beats.length > 16) MUSIC.beats.shift(); }
-    MUSIC.next += grid; MUSIC.i++;
+    MUSIC.next += GRID; MUSIC.i++;
   }
 }
 // いま拍にどれだけ近いか
@@ -727,11 +801,17 @@ function drawSigns(run){
     if(f < 1) continue;
     const x = f * FLOOR_M * PX_PER_M - cam + PX;
     if(x < -40 || x > W + 40) continue;
-    if(!put(IMG.sign, x, GY + 2, 54)){
-      ctx.fillStyle = "#8a6a40"; roundRect(x - 26, GY - 50, 52, 24, 4); ctx.fill();
-    }
-    ctx.fillStyle = COL.ink; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(`地下${f + 1}階`, x, GY - 36);
+    // 地面に置くと障害物に見えるので、天井から吊るす看板にする
+    const sy = bandTop + 10, bw = 62, bh = 26;
+    ctx.strokeStyle = "#8A6A40"; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x - bw / 2 + 8, sy); ctx.lineTo(x - bw / 2 + 11, sy + 12);
+    ctx.moveTo(x + bw / 2 - 8, sy); ctx.lineTo(x + bw / 2 - 11, sy + 12);
+    ctx.stroke();
+    ctx.fillStyle = "#F1E8D4"; roundRect(x - bw / 2, sy + 12, bw, bh, 7); ctx.fill();
+    ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = COL.ink; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(`地下${f + 1}階`, x, sy + 12 + bh / 2 + 1);
   }
   // ベスト記録の place：宝箱を置く
   if(game.bestDist > 5 && game.mode !== "title"){
