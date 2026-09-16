@@ -135,6 +135,14 @@ const STEP = 1/120;       // 物理は固定刻みで回す（端末の速さで
 // 横幅を480→360に狭めたぶん速さも0.8倍にし、先が見えてから届くまでの時間を保つ
 const speedFor = m => Math.min(352, 172 + m * 0.24);
 const gapFor   = m => Math.max(0.55, 1.35 - m * 0.0011);
+
+/* リズム。潜るほど曲が速くなる。
+   障害物の間隔は「これまでの最低間隔」を必ず満たしたうえで、八分音符の目に合わせる。
+   （間隔は伸びる方向にしか動かないので、抜けられることの検証は保たれる） */
+const bpmFor  = m => Math.min(150, 120 + m * 0.035);
+const beatFor = m => 60 / bpmFor(m);
+const gridFor = m => beatFor(m) / 2;
+const gapBeat = m => Math.ceil(gapFor(m) / gridFor(m)) * gridFor(m);
 const tierFor  = m => m < 90 ? 0 : m < 260 ? 1 : m < 520 ? 2 : 3;
 const reach    = v => (2 * JV / G) * v;   // 1回のジャンプで進む横の距離
 
@@ -214,7 +222,7 @@ function generate(run){
     const chunk = pool[Math.floor(Math.random() * pool.length)];
     const end = placeChunk(run, chunk, run.nextX);
     const v = speedFor(m);
-    run.nextX = end + gapFor(m) * v;
+    run.nextX = end + gapBeat(m) * v;
   }
   // 通り過ぎたものは捨てる
   const cut = run.cam - 100;
@@ -308,7 +316,8 @@ const store = {
 
 const game = {
   mode: "title", run: null, best: store.get("poyon_best_m", 0), prevBest: 0,
-  time: 0, parts: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
+  time: 0, parts: [], pops: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
+  combo: 0, bestCombo: 0, bonus: 0, bestDist: store.get("poyon_bestdist_m", 0),
   muted: store.get("poyon_muted", false),
 };
 
@@ -325,6 +334,79 @@ function tone(f, d, type="triangle", v=.12, slide=0){
     o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + d);
   }catch(e){}
 }
+/* ---------------------------------------------------------
+   曲。音源ファイルを持たず、その場で合成する（容量ゼロ・権利の心配なし）。
+   鳴らす時刻を先に予約して、拍の時刻を覚えておく。その時刻とジャンプの
+   ずれを見て PERFECT / GOOD を判定する。
+   --------------------------------------------------------- */
+const MUSIC = { on:false, next:0, i:0, timer:null, beats:[] };
+const SCALE = [0, 3, 5, 7, 10, 12, 10, 7];   // ペンタトニック
+
+function at(freq, t, dur, type, vol, slide){
+  if(game.muted || !actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function noiseHat(t){
+  if(game.muted || !actx) return;
+  const n = actx.createBufferSource(), buf = actx.createBuffer(1, 1024, actx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i = 0; i < 1024; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / 1024);
+  n.buffer = buf;
+  const g = actx.createGain(); g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  const f = actx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 6000;
+  n.connect(f); f.connect(g); g.connect(actx.destination); n.start(t);
+}
+function playStep(i, t){
+  if(i % 2 === 0) at(70, t, 0.16, "sine", 0.22, 0.45);      // 表拍のキック
+  else            noiseHat(t);                               // 裏拍のハイハット
+  if(i % 2 === 0){
+    const n = SCALE[(i / 2) % SCALE.length];
+    at(330 * Math.pow(2, n / 12), t, 0.2, "triangle", 0.055);
+  }
+  if(i % 8 === 0) at(110, t, 0.3, "sine", 0.08);             // 小節あたまのベース
+}
+function musicStart(){
+  if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; } }
+  if(actx.state === "suspended") actx.resume();
+  MUSIC.on = true; MUSIC.i = 0; MUSIC.beats.length = 0; MUSIC.next = actx.currentTime + 0.12;
+  clearInterval(MUSIC.timer); MUSIC.timer = setInterval(musicSchedule, 30);
+}
+function musicStop(){ MUSIC.on = false; clearInterval(MUSIC.timer); MUSIC.timer = null; }
+function musicSchedule(){
+  if(!MUSIC.on || !actx) return;
+  const m = game.run ? game.run.cam / PX_PER_M : 0;
+  const grid = gridFor(m);
+  while(MUSIC.next < actx.currentTime + 0.3){
+    playStep(MUSIC.i, MUSIC.next);
+    if(MUSIC.i % 2 === 0){ MUSIC.beats.push(MUSIC.next); if(MUSIC.beats.length > 16) MUSIC.beats.shift(); }
+    MUSIC.next += grid; MUSIC.i++;
+  }
+}
+// いま拍にどれだけ近いか
+function judgeBeat(){
+  if(!actx || !MUSIC.beats.length) return null;
+  const now = actx.currentTime;
+  let d = 1e9;
+  for(const t of MUSIC.beats) d = Math.min(d, Math.abs(now - t));
+  if(d <= 0.085) return "PERFECT";
+  if(d <= 0.17)  return "GOOD";
+  return null;
+}
+// 拍の上に乗っているか（画面を脈打たせる用）
+function beatPulse(){
+  if(!actx || !MUSIC.beats.length) return 0;
+  const now = actx.currentTime;
+  let d = 1e9;
+  for(const t of MUSIC.beats) if(t <= now) d = Math.min(d, now - t);
+  return Math.max(0, 1 - d / 0.18);
+}
+
 const SFX = {
   jump(){  tone(420, .14, "sine", .13, 1.9); },
   jump2(){ tone(620, .16, "sine", .12, 1.7); },
@@ -347,13 +429,15 @@ const $ = id => document.getElementById(id);
 function showTitle(){
   game.mode = "title";
   $("titleView").classList.remove("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
-  if(game.best > 0){ $("titleBest").textContent = `ベスト：地下${floorOf(game.best)}階（${Math.floor(game.best)}m）`; $("titleBest").classList.remove("hide"); }
+  if(game.best > 0){ $("titleBest").textContent = `ベスト ${Math.floor(game.best)}　（いちばん深く 地下${floorOf(game.bestDist)}階）`; $("titleBest").classList.remove("hide"); }
   game.run = makeRun(); game.run.gen = false;   // 背景だけ流す
 }
 function start(){
   game.mode = "play";
   game.run = makeRun();
-  game.parts = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
+  game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
+  game.combo = 0; game.bestCombo = 0; game.bonus = 0;
+  musicStart();
   game.prevBest = game.best;
   $("titleView").classList.add("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
 }
@@ -361,20 +445,24 @@ const floorOf = m => Math.floor(m / FLOOR_M) + 1;
 
 function die(){
   const run = game.run, m = run.cam / PX_PER_M;
-  game.mode = "dead"; game.deadAt = game.time; game.shake = 12;
+  const score = Math.floor(m) + game.bonus;
+  if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
+  game.mode = "dead"; game.deadAt = game.time; game.shake = 12; game.combo = 0;
+  musicStop();
   burst(PX, GY + run.P.y, 30, "#42E6E0", 260, 60);
   SFX.dead();
   try{ navigator.vibrate && navigator.vibrate(60); }catch(e){}
-  const isNew = m > game.best + 0.5;
-  if(isNew){ game.best = m; store.set("poyon_best_m", m); }
+  const isNew = score > game.best;
+  if(isNew){ game.best = score; store.set("poyon_best_m", score); }
   setTimeout(() => {
     if(game.mode !== "dead") return;
     $("rFloor").textContent = `地下 ${floorOf(m)} 階`;
-    $("rDist").textContent = `${Math.floor(m)} m`;
+    $("rDist").innerHTML = `${Math.floor(m)} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
+      <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
     $("rNew").innerHTML = isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "";
-    $("rBest").innerHTML = `ベスト <b>地下${floorOf(game.best)}階 ${Math.floor(game.best)}m</b>`;
-    const gap = Math.floor(game.best - m);
-    $("rGap").textContent = !isNew && gap > 0 ? `ベストまで あと ${gap} m` : "";
+    $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
+    const gap = Math.floor(game.best - score);
+    $("rGap").textContent = !isNew && gap > 0 ? `ベストまで あと ${gap}` : "";
     $("resultView").classList.remove("hide");
     $("rTap").style.visibility = "hidden";
     if(isNew && game.prevBest > 0) SFX.rec();
@@ -386,7 +474,7 @@ function onPress(e){
   if(e && e.target && e.target.id === "mute") return;
   if(e && e.cancelable) e.preventDefault();
   if(game.mode === "title"){ start(); return; }
-  if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); return; }
+  if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); musicStart(); return; }
   if(game.mode === "dead"){
     // 結果が出てすぐのタップでは始めない（死んだ瞬間の連打で飛ばさないため）
     if(game.time - game.deadAt > 1.1) start();
@@ -397,7 +485,7 @@ function onPress(e){
 window.addEventListener("pointerdown", onPress, {passive:false});
 window.addEventListener("keydown", e => { if(e.code === "Space" || e.code === "ArrowUp" || e.code === "Enter"){ e.preventDefault(); if(!e.repeat) onPress(null); } });
 document.addEventListener("visibilitychange", () => {
-  if(document.hidden && game.mode === "play"){ game.mode = "paused"; $("pauseView").classList.remove("hide"); }
+  if(document.hidden && game.mode === "play"){ game.mode = "paused"; $("pauseView").classList.remove("hide"); musicStop(); }
 });
 $("mute").addEventListener("pointerdown", e => {
   e.stopPropagation();
@@ -466,6 +554,10 @@ function drawBackground(cam){
   ctx.restore();
 
   // 光るクリスタルとキノコ（洞窟を「暗い」ではなく「ファンタジー」に見せる）
+  // 拍に合わせてふわっと明るくし、リズムを目でも分かるようにする
+  const pulse = (game.mode === "play") ? beatPulse() : 0;
+  if(pulse > 0.02){ ctx.fillStyle = `rgba(255,255,255,${pulse * 0.09})`; ctx.fillRect(0, 0, W, H); }
+
   // 飾りは「壁の模様」として上のほうにだけ置く。
   // 地面に置くと障害物と見分けがつかなくなるため、地面には一切置かない。
   const sp = 190, par = 0.5, base = cam * par;
@@ -577,8 +669,8 @@ function drawSigns(run){
     ctx.fillText(`地下${f + 1}階`, x, GY - 36);
   }
   // ベスト記録の place：宝箱を置く
-  if(game.best > 5 && game.mode !== "title"){
-    const x = game.best * PX_PER_M - cam + PX;
+  if(game.bestDist > 5 && game.mode !== "title"){
+    const x = game.bestDist * PX_PER_M - cam + PX;
     if(x > -40 && x < W + 40){
       const bob = Math.sin(game.time * 3) * 2;
       put(IMG.chest, x, GY + 2 + bob, 34);
@@ -687,6 +779,21 @@ function drawSlime(run){
   }
 }
 
+function drawPops(dt){
+  for(const p of game.pops){
+    p.t += dt;
+    const k = p.t / 0.75;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.font = `900 ${16 + (1 - k) * 6}px sans-serif`;
+    ctx.lineWidth = 5; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(255,255,255,.95)";
+    const y = GY - 66 - k * 34;
+    ctx.strokeText(p.text, PX + 26, y); ctx.fillStyle = p.col; ctx.fillText(p.text, PX + 26, y);
+  }
+  ctx.globalAlpha = 1;
+  game.pops = game.pops.filter(p => p.t < 0.75);
+}
+
 function drawParticles(dt){
   for(const p of game.parts){
     p.t += dt; p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
@@ -714,9 +821,18 @@ function drawHUD(run){
   const hx = roomy ? W / 2 : 12;
   label(`地下 ${floorOf(m)} 階`, hx, y, roomy ? 34 : 20, "#5B4A86");
   label(`${Math.floor(m)} m`, hx, y + (roomy ? 42 : 24), roomy ? 20 : 13, "#7A68A8");
+  if(game.bonus > 0){
+    label(`リズム ＋${game.bonus}`, hx, y + (roomy ? 70 : 40), roomy ? 16 : 12, "#C98016");
+  }
   if(game.best > 0){
-    if(roomy) label(`BEST ${Math.floor(game.best)}m`, hx, y + 70, 14, "#C98016");
-    else { ctx.textAlign = "right"; label(`BEST ${Math.floor(game.best)}m`, W - 58, y + 5, 12, "#C98016"); }
+    const by = y + (roomy ? (game.bonus ? 96 : 70) : 5);
+    if(roomy) label(`BEST ${Math.floor(game.best)}`, hx, by, 13, "#9A8ABC");
+    else { ctx.textAlign = "right"; label(`BEST ${Math.floor(game.best)}`, W - 58, by, 12, "#9A8ABC"); }
+  }
+  if(game.combo >= 2){
+    ctx.textAlign = "center";
+    const k = Math.min(1, game.combo / 20);
+    label(`${game.combo} コンボ`, W / 2, bandTop + 38, 22 + k * 8, "#FF7A9C");
   }
   if(game.floorFlash > 0){
     ctx.globalAlpha = Math.min(1, game.floorFlash * 2);
@@ -739,8 +855,23 @@ function frame(now){
       stepRun(run, STEP);
       acc -= STEP;
       for(const e of run.ev){
-        if(e === "jump"){ SFX.jump(); burst(PX, GY, 6, "rgba(255,255,255,.85)", 90); }
-        else if(e === "jump2"){ SFX.jump2(); burst(PX, GY + run.P.y + R, 10, "#B8F7F4", 150); }
+        if(e === "jump" || e === "jump2"){
+          if(e === "jump"){ SFX.jump(); burst(PX, GY, 6, "rgba(255,255,255,.85)", 90); }
+          else { SFX.jump2(); burst(PX, GY + run.P.y + R, 10, "#B8F7F4", 150); }
+          const j = judgeBeat();
+          if(j === "PERFECT"){
+            game.combo++; game.bestCombo = Math.max(game.bestCombo, game.combo);
+            game.bonus += 2 + Math.min(8, Math.floor(game.combo / 5));
+            game.pops.push({ text: game.combo >= 2 ? `PERFECT ${game.combo}` : "PERFECT", col: "#FFB300", t: 0 });
+            at(1320, actx.currentTime, .12, "square", .09);
+            burst(PX, GY + run.P.y, 10, "#FFD13B", 170);
+          }else if(j === "GOOD"){
+            game.bonus += 1;
+            game.pops.push({ text: "GOOD", col: "#3FA9E0", t: 0 });
+          }else{
+            game.combo = 0;
+          }
+        }
         else if(e === "land"){ SFX.land(); game.squashT = 0.12; burst(PX, GY, 5, "rgba(255,255,255,.8)", 70); }
       }
       run.ev.length = 0;
@@ -770,6 +901,7 @@ function frame(now){
   drawObstacles(run);
   drawSlime(run);
   drawParticles(dt);
+  drawPops(dt);
   // 左右のふちを暗く
   const edge = ctx.createLinearGradient(0, 0, W, 0);
   edge.addColorStop(0, "rgba(90,70,120,.18)"); edge.addColorStop(.1, "rgba(0,0,0,0)"); edge.addColorStop(.9, "rgba(0,0,0,0)"); edge.addColorStop(1, "rgba(90,70,120,.18)");
