@@ -688,7 +688,7 @@ const NAMES0 = ["ぷに", "もち", "ぽむ", "あおた", "ちゃぽ", "こは�
 const CH1 = { t: "ひろった日", p: [
   "雨の日だった。物置の裏の、空きびんの中にいた。",
   "手のひらにのせたら、ひやりとして、それから、ゆっくりあたたかくなった。",
-  "名前をつけた。それだけで、この子はこっちを見るようになった。",
+  "「{n}」と名前をつけた。それだけで、この子はこっちを見るようになった。",
 ]};
 
 const STORY = {
@@ -709,14 +709,14 @@ const STORY = {
       "村の人が、この道を遠まわりして歩くようになった。",
     ]},
     { t: "討伐隊", p: [
-      "たいまつの列が、坂をのぼってくる。名前を呼んだら、この子は逃げた。",
+      "たいまつの列が、坂をのぼってくる。{n}、と呼んだら、この子は逃げた。",
       "追ってくる人を、ひとりも取りこまないように。よけて、よけて、よけながら。",
       "朝、戸の前にいた。傷だらけで、もう何も取りこめないくらい、小さくなって。",
       "手のひらにのせたら、ひやりとして、",
       "それから、あたたかくならなかった。",
     ]},
   ], rescue: { t: "もういちど、あたためる", p: [
-    "手のひらにのせたまま、ずっと、握っていた。",
+    "{n}、と呼びながら、手のひらにのせたまま、ずっと握っていた。",
     "一日。二日。村の人が代わるがわる来て、何も言わずに帰っていった。",
     "三日目の朝、ひやりとしたものが、ゆっくり、あたたかくなった。",
     "取りこむ力は、もどらなかった。だからもう、大きくならない。",
@@ -726,7 +726,7 @@ const STORY = {
   beast: { label: "けものの道", ch: [ CH1,
     { t: "はやく帰りたい", p: [
       "耳が生えた。音がよく聞こえるようになったらしい。",
-      "帰り道、名前を呼ぶ前に走りだすようになった。",
+      "帰り道、{n}、と呼ぶ前に走りだすようになった。",
       "早く会いたいんだと思った。たぶん、それは合っていた。",
     ]},
     { t: "しっぽ", p: [
@@ -740,14 +740,14 @@ const STORY = {
       "夜、寝顔をじっと見ている。何かを思い出そうとしている顔だった。",
     ]},
     { t: "遠吠え", p: [
-      "目がさめたら、いなかった。追いかけた。呼んだ。",
+      "目がさめたら、いなかった。追いかけた。{n}、と呼んだ。",
       "振りかえって、逃げた。爪を地面に立てて、こっちに背を向けて。",
       "傷つけたくなかったのだと、あとから分かった。",
       "いまは、山の向こうにいる。毎晩、決まった時間に、こちらへ向かって吠える。",
       "「おかえり」と言っているのか、「来るな」と言っているのか、もう分からない。",
     ]},
   ], rescue: { t: "においの おぼえかた", p: [
-    "毎晩おなじ時間に、戸口で返事をすることにした。名前を呼ぶだけ。",
+    "毎晩おなじ時間に、戸口で返事をすることにした。{n}、と呼ぶだけ。",
     "春がきて、冬がきて、また春がきた。",
     "ある朝、戸の前に足あとがあった。次の朝には、足あととクリスタルがひとつ。",
     "その次の朝、山のにおいをつけたまま、その子はこっちの手を嗅いで、しっぽを振った。",
@@ -766,7 +766,7 @@ const STORY = {
     ]},
     { t: "がっこう", p: [
       "人の形になった。帽子と手袋で、街の学校に通わせた。",
-      "名前を書ける。計算ができる。詩を書く。先生が、この子をほめる。",
+      "「{n}」と名前を書ける。計算ができる。詩を書く。先生が、この子をほめる。",
       "うれしくて、うれしくて、帽子を深くかぶせるのを、忘れた。",
     ]},
     { t: "ばれた日", p: [
@@ -780,7 +780,7 @@ const STORY = {
     "街を出た。汽車を三回乗りかえて、誰も知らない海辺の町に着いた。",
     "その子は、帽子をかぶらなくなった。町の人は、たまに驚いて、それから慣れた。",
     "「かしこい子ですね」と言われるたび、こっちが照れる。",
-    "ある日、その子が言った。",
+    "ある日、{n}が言った。",
     "「わたしは、あなたと話すために、ぜんぶ覚えたの」",
   ]}},
 };
@@ -798,10 +798,12 @@ const pet = {
   line:  store.get("poyon_pet_line", "slime"),
   stage: store.get("poyon_pet_stage", 1),
   gems:  store.get("poyon_gems", 0),
+  total: store.get("poyon_total", 0),      // これまでに運んできた ぜんぶ
 };
 function savePet(){
   store.set("poyon_pet_name", pet.name); store.set("poyon_pet_line", pet.line);
   store.set("poyon_pet_stage", pet.stage); store.set("poyon_gems", pet.gems);
+  store.set("poyon_total", pet.total);
 }
 const formName = f => f.stage === 1 ? "ぽよん" : LINE_INFO[f.line].names[f.stage - 1];
 const bodyCol  = f => LINE_INFO[f.line].body[f.stage - 1];
@@ -822,6 +824,7 @@ const game = {
   ui: null, runGems: 0, evoT: 0, petHappy: 0,
   time: 0, parts: [], pops: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
   combo: 0, bestCombo: 0, bonus: 0, revived: false, bestDist: store.get("poyon_bestdist_m", 0),
+  lastDeath: store.get("poyon_lastdeath_m", 0), passedDeath: false,
   muted: store.get("poyon_muted", false),
 };
 
@@ -1046,7 +1049,7 @@ function start(){
   game.runGems = 0;
   game.run = makeRun({ magnet: perk("magnet") });
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
-  game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.revived = false;
+  game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.revived = false; game.passedDeath = false;
   musicStart();
   game.prevBest = game.best;
   $("titleView").classList.add("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
@@ -1058,7 +1061,8 @@ function die(){
   const score = Math.floor(m) + game.bonus;
   // 拾ったクリスタルを持ち帰る（系統によっては多めに持てる）
   const earned = Math.round(game.runGems * perk("gem"));
-  pet.gems += earned; savePet();
+  pet.gems += earned; pet.total += earned; savePet();
+  game.lastDeath = m; store.set("poyon_lastdeath_m", m);   // つぎに来たとき、ここが目印になる
   if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
   game.mode = "dead"; game.deadAt = game.time; game.shake = 12; game.combo = 0;
   musicStop();
@@ -1198,7 +1202,8 @@ const KANJI = ["", "一", "二", "三", "四", "五"];
 function openStory(key, n){
   const d = n === 0 ? STORY[key].rescue : STORY[key].ch[n - 1];
   game.ui = "story";
-  NV.key = key; NV.n = n; NV.i = 0; NV.lines = d.p; NV.alpha = n === 0 ? 0 : 1; NV.want = 1;
+  NV.key = key; NV.n = n; NV.i = 0;
+  NV.lines = d.p.map(x => x.replace(/\{n\}/g, pet.name));   // その子の名前を本文に入れる NV.alpha = n === 0 ? 0 : 1; NV.want = 1;
   const no = n === 0 ? "救いの章" : `第${KANJI[n]}章`;
   $("stNo").textContent = STORY[key].label;
   $("stChoice").classList.add("hide"); $("stClose").classList.add("hide");
@@ -1629,6 +1634,21 @@ function drawSigns(run){
     ctx.fillStyle = COL.ink; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(`地下${f + 1}階`, x, sy + 12 + bh / 2 + 1);
   }
+  // 前に力つきた場所。目印があると「今日はここを越える」になる
+  if(game.lastDeath > 3 && game.mode !== "title" && Math.abs(game.lastDeath - game.bestDist) > 1){
+    const x = game.lastDeath * PX_PER_M - cam + PX;
+    if(x > -40 && x < W + 40){
+      ctx.lineCap = "round"; ctx.lineWidth = 3; ctx.strokeStyle = "#8A6A40";
+      ctx.beginPath(); ctx.moveTo(x, GY + 1); ctx.lineTo(x, GY - 30); ctx.stroke();
+      ctx.lineCap = "butt";
+      ctx.fillStyle = "#EFE6FA"; roundRect(x, GY - 30, 22, 14, 3); ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = COL.line; ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+      ctx.font = "900 10px sans-serif"; ctx.lineWidth = 3; ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(255,255,255,.92)"; ctx.strokeText("ここまで", x + 2, GY - 38);
+      ctx.fillStyle = "#9A8ABC"; ctx.fillText("ここまで", x + 2, GY - 38);
+    }
+  }
   // ベスト記録の place：宝箱を置く
   if(game.bestDist > 5 && game.mode !== "title"){
     const x = game.bestDist * PX_PER_M - cam + PX;
@@ -2038,6 +2058,13 @@ function drawHome(){
   ctx.beginPath(); ctx.ellipse(cx - 12, baseY - 9, 20, 5, 0, 0, 7); ctx.fill();
   put(IMG.mushroom, cx - 118, GY + 2, 30);
   put(IMG.crystal,  cx + 122, GY + 2, 26);
+  // この子がこれまでに運んできたぶんが、おうちに積もっていく
+  const pile = Math.min(18, Math.floor(pet.total / 18));
+  for(let i = 0; i < pile; i++){
+    const sd = i % 2 ? 1 : -1, a = hash(i * 3.7 + 1), b = hash(i * 9.1 + 2);
+    put(IMG.crystal, cx + sd * (58 + a * 104), GY + 5 + b * 28, 13 + b * 8);
+  }
+  if(pile >= 18) put(IMG.chest, cx - 150, GY + 26, 30);
 
   // ふだんはのんびり跳ねている。なでると大きくはずむ
   const happy = Math.max(0, game.petHappy);
@@ -2154,6 +2181,12 @@ function frame(now){
       }
       run.ev.length = 0;
       if(run.P.dead){ die(); break; }
+    }
+    const md = run.cam / PX_PER_M;
+    if(game.lastDeath > 3 && !game.passedDeath && md > game.lastDeath){
+      game.passedDeath = true;
+      game.pops.push({ text: "まえを こえた！", col: "#FF7A9C", t: 0 });
+      SFX.floor();
     }
     const f = floorOf(run.cam / PX_PER_M);
     if(f > game.lastFloor){ game.lastFloor = f; game.floorFlash = 1.2; SFX.floor(); }
