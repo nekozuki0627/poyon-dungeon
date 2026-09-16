@@ -134,6 +134,21 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
 .nv-bar{position:fixed;left:0;right:0;height:max(7vh,44px);background:#000;z-index:3}
 .nv-bar.t{top:0}
 .nv-bar.b{bottom:0}
+/* 紙芝居の挿絵。2枚を重ねて、切り替えはフェード。表示中はゆっくり寄っていく */
+.nv-scene{position:fixed;left:0;right:0;top:max(7vh,44px);bottom:max(7vh,44px);overflow:hidden;background:#000}
+.nv-scene img{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;
+  transition:opacity 1.3s ease, filter 3s ease;
+}
+.nv-scene img.on{opacity:1;animation:kenburns 16s ease-out forwards}
+.nv-scene img.dim{filter:grayscale(.75) brightness(.5)}
+@keyframes kenburns{from{transform:scale(1.03)}to{transform:scale(1.14) translateY(-2%)}}
+.nv-scene::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,0) 20%,rgba(0,0,0,0) 58%,rgba(0,0,0,.85) 84%,#000);
+}
+/* 文字の枠で跳ねる、デフォルメのその子 */
+#nvMini{position:absolute;right:16px;bottom:10px;width:44px;height:44px;pointer-events:none}
 #nvChar{
   position:fixed;left:50%;transform:translateX(-50%);
   bottom:calc(max(7vh,44px) + 176px);
@@ -324,12 +339,14 @@ body.cinema #adbar, body.cinema #mute{display:none}
 
 <div class="overlay hide" id="storyView">
   <div class="nv-bg" id="nvBg"></div>
+  <div class="nv-scene hide" id="nvScene"><img id="scA" alt=""><img id="scB" alt=""></div>
   <div class="nv-grain"></div>
   <canvas id="nvChar"></canvas>
   <div class="nv-no" id="stNo"></div>
   <div class="nv-box">
     <div class="nv-text" id="stText"></div>
-    <div class="nv-next" id="stNext">タップ</div>
+    <div class="nv-next" id="stNext">▼</div>
+    <canvas id="nvMini"></canvas>
   </div>
   <div class="nv-bar t"></div>
   <div class="nv-bar b"></div>
@@ -1301,14 +1318,58 @@ function storyMusic(on){
   play(); stTimer = setInterval(play, 3700);
 }
 
-const NV = { key: null, n: 1, i: 0, lines: [], typing: null, done: false, raf: 0, alpha: 1, want: 1, lock: false };
+const NV = { key: null, n: 1, i: 0, lines: [], typing: null, done: false, raf: 0, alpha: 1, want: 1, lock: false,
+             scene: "", sceneOk: false, layer: 0 };
+
+/* 挿絵のファイル名。assets/story/{id}_a.jpg と _b.jpg
+   第1章は共通（c1）。スライム s、けもの b、ヒトガタ h。救いの章は 0。
+   ヒトガタの人の姿の章（4・5・救い）は、育てた子に合わせて m / f の絵を使う */
+function sceneId(key, n){
+  if(n === 1) return "c1";
+  const k = { slime: "s", beast: "b", human: "h" }[key];
+  const g = key === "human" && (n >= 4 || n === 0) ? (pet.line === "human_m" ? "m" : "f") : "";
+  return k + n + g;
+}
+// 何文目から2枚目の絵に切り替えるか（書いていない章は半分のところ）
+const SCENE_AT = { c1: 1, s2: 2, s3: 2, s4: 1, s5: 2, s0: 3, b2: 1, b3: 2, b4: 2, b5: 3, b0: 2, h2: 1, h3: 1, h4: 1, h5: 2, h0: 2 };
+
+function sceneShow(tag){
+  if(NV.n < 0) return;
+  const id = sceneId(NV.key, NV.n);
+  const want = `${id}_${tag}`;
+  if(NV.scene === want) return;
+  NV.scene = want;
+  const next = NV.layer ? $("scA") : $("scB"), cur = NV.layer ? $("scB") : $("scA");
+  const img = new Image();
+  img.onload = () => {
+    if(NV.scene !== want) return;
+    next.src = img.src;
+    next.classList.remove("on", "dim"); void next.offsetWidth;
+    next.classList.add("on"); cur.classList.remove("on");
+    NV.layer = 1 - NV.layer;
+    NV.sceneOk = true;
+    $("nvScene").classList.remove("hide"); $("nvChar").style.display = "none";
+  };
+  img.onerror = () => {
+    // 挿絵がまだ無い章は、立ち絵で見せる
+    if(NV.scene !== want || NV.sceneOk) return;
+    $("nvScene").classList.add("hide"); $("nvChar").style.display = "";
+  };
+  img.src = `assets/story/${want}.jpg`;
+}
+function sceneReset(){
+  NV.scene = ""; NV.sceneOk = false;
+  for(const id of ["scA", "scB"]){ const e = $(id); e.classList.remove("on", "dim"); e.removeAttribute("src"); }
+  $("nvScene").classList.add("hide"); $("nvChar").style.display = "";
+}
 const KANJI = ["", "一", "二", "三", "四", "五"];
 
 function openStory(key, n){
   const d = n === 0 ? STORY[key].rescue : STORY[key].ch[n - 1];
   game.ui = "story";
   NV.key = key; NV.n = n; NV.i = 0;
-  NV.lines = d.p.map(x => x.replace(/\{n\}/g, pet.name));   // その子の名前を本文に入れる NV.alpha = n === 0 ? 0 : 1; NV.want = 1;
+  NV.lines = d.p.map(x => x.replace(/\{n\}/g, pet.name));   // その子の名前を本文に入れる
+  NV.alpha = n === 0 ? 0 : 1; NV.want = 1;
   const no = n === 0 ? "救いの章" : `第${KANJI[n]}章`;
   $("stNo").textContent = STORY[key].label;
   $("stChoice").classList.add("hide"); $("stClose").classList.add("hide");
@@ -1319,6 +1380,8 @@ function openStory(key, n){
   document.body.classList.add("cinema");
   storyMusic(true);
   $("storyView").classList.remove("hide");
+  sceneReset();
+  sceneShow("a");
   nvStand();
   // 章のタイトルを一枚はさむ（映画のあれ）
   const card = $("nvCard");
@@ -1343,9 +1406,18 @@ function nvStand(){
     : NV.key === "human" ? (pet.line.indexOf("human") === 0 ? pet.line : "human_f")
     : NV.key;
   const stage = NV.n < 0 ? pet.stage : NV.n === 0 ? 5 : NV.n;
+  // 文字の枠で跳ねる子は、いまの姿（デフォルメ）
+  const mc = $("nvMini"), mg = mc.getContext("2d"), ms = 44;
+  mc.width = ms * d; mc.height = ms * d; mg.setTransform(d, 0, 0, d, 0, 0);
   cancelAnimationFrame(NV.raf);
   const loop = () => {
     const t = performance.now() / 1000;
+    // ローディングのように、文字が出ている間は速く、読み終わったらゆっくり跳ねる
+    const sp = NV.done ? 0.9 : 0.42;
+    const hk = Math.abs(Math.sin(t / sp * Math.PI));
+    mg.clearRect(0, 0, ms, ms);
+    drawCreature(mg, pet, ms / 2, ms - 2 - hk * 9, 20,
+                 { im: IMG.s1, t, sx: 1 + (1 - hk) * 0.18, sy: 1 - (1 - hk) * 0.18, cap: 1.5 });
     NV.alpha += (NV.want - NV.alpha) * 0.04;
     g.clearRect(0, 0, size, size);
     g.globalAlpha = Math.max(0, Math.min(1, NV.alpha));
@@ -1370,8 +1442,15 @@ function nvLine(){
     $("stText").textContent = text.slice(0, i);
     if(i >= text.length){ clearInterval(NV.typing); nvReady(); }
   }, NV.n === 5 || NV.n === 0 ? 52 : 36);
+  // 紙芝居：決めた文から2枚目の絵へ
+  if(NV.n >= 0){
+    const id = sceneId(NV.key, NV.n).replace(/[mf]$/, "");
+    const at = SCENE_AT[id] != null ? SCENE_AT[id] : Math.ceil(NV.lines.length / 2);
+    sceneShow(NV.i >= at ? "b" : "a");
+  }
   // 最後の一文で、その子は消える（救いの章では逆に、ゆっくり現れる）
   const last = NV.i === NV.lines.length - 1;
+  if(NV.n === 5 && last) setTimeout(() => { const on = document.querySelector(".nv-scene img.on"); if(on) on.classList.add("dim"); }, 400);
   if(NV.n === 5 && last) NV.want = 0.12;
   if(NV.n === 0) NV.want = Math.min(1, 0.25 + NV.i * 0.3);
 }
@@ -1429,6 +1508,7 @@ function pickVoice(){
 function openTalk(){
   game.ui = "story";
   NV.key = skey(pet.line); NV.n = -1; NV.i = 0; NV.alpha = 1; NV.want = 1; NV.lock = false;
+  sceneReset();
   NV.lines = [pickVoice().replace(/\{n\}/g, pet.name)];
   $("stNo").textContent = "おかえり";
   $("stChoice").classList.add("hide"); $("stClose").classList.add("hide");
