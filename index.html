@@ -274,6 +274,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
   <button class="btn sub ready hide" id="rGrow" style="margin-top:12px">✨ そだてられる！</button>
   <button class="revive hide" id="reviveBtn">▶　広告を見て復活</button>
   <div class="tap" id="rTap" style="visibility:hidden">タップでもう1回</div>
+  <button class="btn sub hide" id="rHome" style="margin-top:10px;font-size:13px;padding:9px 18px">おうちへ もどる</button>
 </div>
 
 <!-- 動画広告の場所。いまは仮の画面で、本物の広告は showRewardAd() の中に入れる -->
@@ -344,7 +345,10 @@ body.cinema #adbar, body.cinema #mute{display:none}
 
 <div class="overlay hide" id="nameView">
   <div class="card" style="text-align:center">
-    <div class="r-label">なまえを つける</div>
+    <div class="r-label" id="nameLabel">なまえを つける</div>
+    <div class="r-gap hide" id="nameNote" style="margin-top:8px;line-height:1.7">
+      雨の日にひろった、小さいの。<br>ここから ぜんぶ はじまる。
+    </div>
     <input class="nameinput" id="nameInput" maxlength="8" autocomplete="off">
     <button class="btn sub" id="nameOk" style="margin-top:8px">けってい</button>
   </div>
@@ -1063,6 +1067,7 @@ function die(){
   const earned = Math.round(game.runGems * perk("gem"));
   pet.gems += earned; pet.total += earned; savePet();
   game.lastDeath = m; store.set("poyon_lastdeath_m", m);   // つぎに来たとき、ここが目印になる
+  game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m };
   if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
   game.mode = "dead"; game.deadAt = game.time; game.shake = 12; game.combo = 0;
   musicStop();
@@ -1084,9 +1089,14 @@ function die(){
     $("rGrow").classList.toggle("hide", !canEvolve());
     $("reviveBtn").classList.toggle("hide", game.revived);
     $("resultView").classList.remove("hide");
+    $("rHome").classList.add("hide");
     $("rTap").style.visibility = "hidden";
     if(isNew && game.prevBest > 0) SFX.rec();
-    setTimeout(() => { if(game.mode === "dead") $("rTap").style.visibility = "visible"; }, 450);
+    setTimeout(() => {
+      if(game.mode !== "dead") return;
+      $("rTap").style.visibility = "visible";
+      $("rHome").classList.remove("hide");
+    }, 450);
   }, 650);
 }
 
@@ -1234,10 +1244,10 @@ function nvStand(){
   c.width = size * d; c.height = size * d;
   c.style.width = size + "px"; c.style.height = size + "px";
   g.scale(d, d);
-  const line = NV.key === "human"
-    ? (pet.line.indexOf("human") === 0 ? pet.line : "human_f")
+  const line = NV.n < 0 ? pet.line
+    : NV.key === "human" ? (pet.line.indexOf("human") === 0 ? pet.line : "human_f")
     : NV.key;
-  const stage = NV.n === 0 ? 5 : NV.n;
+  const stage = NV.n < 0 ? pet.stage : NV.n === 0 ? 5 : NV.n;
   cancelAnimationFrame(NV.raf);
   const loop = () => {
     const t = performance.now() / 1000;
@@ -1299,6 +1309,43 @@ function unlockStory(key, n){
 const hasNewStory = () => SLINES.some(k => story[k] >= 5 && !rescue[k]);
 
 /* ---- おもいで（読み返し） ---- */
+/* ---- おかえりの ひとこと ----
+   帰ってきたときに、たまに出る。章ほど重くしない（1文だけ・タイトルなし）。
+   その日の成果と、いまの姿で言うことが変わる。 */
+function pickVoice(){
+  const r = game.lastRun, st = pet.stage, ln = pet.line, pool = [];
+  if(r){
+    if(r.isNew)      pool.push("いちばん深いところまで行った日。{n}は、しばらく震えていた。");
+    if(r.revived)    pool.push("一度ちからつきたはずの{n}が、平気な顔で戻ってきた。");
+    if(r.gems === 0) pool.push("手ぶらで帰ってきた{n}は、なぜか少し得意そうだった。",
+                               "何も持って帰れなかった日も、{n}はいつもどおり寄ってくる。");
+    if(r.gems >= 12) pool.push("{n}は運んだぶんを床に並べて、こっちの顔を見た。ほめる番らしい。",
+                               "数えきれないほど持って帰ってきた。{n}の体が、まだ少し光っている。");
+    if(r.m < 10)     pool.push("すぐに戻ってきた。{n}は、何事もなかったような顔をしている。");
+  }
+  pool.push("{n}が帰ってきた。まず、こっちの足もとにぶつかってくる。",
+            "土のにおいをつけたまま、{n}が戸を押して入ってきた。",
+            "{n}は、こっちが座るのを待ってから、となりに来た。");
+  if(ln.indexOf("human") === 0 && st >= 3) pool.push("{n}が言った。「おかえり」。まだ、水の音みたいな声で。");
+  if(ln === "beast" && st >= 3) pool.push("{n}は鼻を近づけて、こっちのにおいを確かめてから、しっぽを振った。");
+  if(ln === "slime" && st >= 4) pool.push("{n}は、戸に入りきらない体をめいっぱい小さくして、入ってきた。");
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function openTalk(){
+  game.ui = "story";
+  NV.key = skey(pet.line); NV.n = -1; NV.i = 0; NV.alpha = 1; NV.want = 1; NV.lock = false;
+  NV.lines = [pickVoice().replace(/\{n\}/g, pet.name)];
+  $("stNo").textContent = "おかえり";
+  $("stChoice").classList.add("hide"); $("stClose").classList.add("hide");
+  $("stText").textContent = ""; $("stNext").style.visibility = "hidden";
+  $("nvBg").style.setProperty("--bg1", NV_BG.home[0]);
+  $("nvBg").style.setProperty("--bg2", NV_BG.home[1]);
+  document.body.classList.add("cinema");
+  $("storyView").classList.remove("hide");
+  nvStand();
+  nvLine();
+}
+
 let bookLine = "slime";
 function openBook(){
   game.ui = "book"; bookLine = skey(pet.line);
@@ -1442,7 +1489,31 @@ tapBtn("nameOk", () => {
   if(v) pet.name = v;
   savePet(); refreshHome();
   game.ui = null; $("nameView").classList.add("hide");
+  if(introMode){
+    // はじめてのときは、名前をつけたらそのまま第1章へ
+    introMode = false;
+    store.set("poyon_intro_done", true);
+    $("nameLabel").textContent = "なまえを つける";
+    $("nameNote").classList.add("hide");
+    openStory(skey(pet.line), 1);
+  }
 });
+tapBtn("rHome", () => {
+  showTitle();
+  if(Math.random() < 0.55) openTalk();
+});
+
+/* はじめて開いたとき。名前をつけて、第1章を読んでから おうちに立つ。
+   （いきなり「もぐる」だと第1章を読む機会がないため） */
+let introMode = false;
+function maybeIntro(){
+  if(store.get("poyon_intro_done", false)) return;
+  introMode = true; game.ui = "name";
+  $("nameLabel").textContent = "この子に なまえを つけて";
+  $("nameNote").classList.remove("hide");
+  $("nameInput").value = pet.name;
+  $("nameView").classList.remove("hide");
+}
 $("nameInput").addEventListener("keydown", e => { if(e.key === "Enter") $("nameOk").click(); });
 
 $("mute").addEventListener("pointerdown", e => {
@@ -2225,6 +2296,7 @@ function frame(now){
 }
 
 showTitle();
+maybeIntro();
 requestAnimationFrame(frame);
 </script>
 </body>
