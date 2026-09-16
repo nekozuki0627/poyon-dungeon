@@ -48,7 +48,8 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
 /* 地面の高さは画面の縦幅で変わるので、canvas 側から --ground をもらって合わせる。
    こうしないと、なまえの札がスライムに重なってしまう */
 .home-bottom{
-  position:fixed;left:0;right:0;top:var(--ground,60%);bottom:0;
+  /* 地面の線ぴったりだと、寝床や積んだクリスタルに名前の札が乗ってしまう。少し下げる */
+  position:fixed;left:0;right:0;top:calc(var(--ground,60%) + 20px);bottom:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   padding:6px 16px calc(56px + env(safe-area-inset-bottom));
 }
@@ -64,7 +65,8 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
   padding:4px 16px;font-size:15px;font-weight:900;color:#3E8FB8;border:2px solid #594236;
 }
 .gemline b{color:#2E7C9E}
-.row{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:9px}
+.gemline small{font-size:11px;color:#C98016;margin-left:6px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:9px}
 .btn{
   pointer-events:auto;font-family:inherit;cursor:pointer;font-weight:900;letter-spacing:.03em;
   border:3px solid #594236;border-radius:99px;color:#594236;
@@ -274,6 +276,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
     <div class="row">
       <button class="btn sub" id="growBtn">そだてる<span class="badge hide" id="growBadge">！</span></button>
       <button class="btn sub" id="bookBtn">おもいで</button>
+      <button class="btn sub ready hide" id="nextBtn">つぎの子</button>
     </div>
   </div>
 </div>
@@ -359,6 +362,16 @@ body.cinema #adbar, body.cinema #mute{display:none}
     </div>
     <button class="btn sub ready" id="shopBuy" style="margin-top:14px">￥240 で よむ</button>
     <button class="btn sub" id="shopBack" style="margin-top:8px">やめる</button>
+  </div>
+</div>
+
+<div class="overlay hide" id="retireView">
+  <div class="card" style="text-align:center;pointer-events:auto">
+    <div class="r-label">つぎの子</div>
+    <div class="st-title" id="reTitle" style="text-align:center;margin-top:8px"></div>
+    <div class="st-lock" id="reText"></div>
+    <button class="btn sub ready" id="reOk" style="margin-top:14px">あたらしい子を むかえる</button>
+    <button class="btn sub" id="reBack" style="margin-top:8px">まだ いっしょにいる</button>
   </div>
 </div>
 
@@ -823,6 +836,9 @@ const pet = {
   gems:  store.get("poyon_gems", 0),
   total: store.get("poyon_total", 0),      // これまでに運んできた ぜんぶ
 };
+// 育てきった子たち。小屋に残って、つぎの子の稼ぎを手伝ってくれる
+const family = store.get("poyon_family", []);
+const famBonus = () => 1 + 0.10 * Math.min(6, family.length);
 function savePet(){
   store.set("poyon_pet_name", pet.name); store.set("poyon_pet_line", pet.line);
   store.set("poyon_pet_stage", pet.stage); store.set("poyon_gems", pet.gems);
@@ -1062,9 +1078,12 @@ function showTitle(){
 function refreshHome(){
   $("petName").innerHTML = `${pet.name} <small>✎</small>`;
   $("petTitle").innerHTML = `${formName(pet)}　<span class="stars">${"★".repeat(pet.stage)}${"☆".repeat(5 - pet.stage)}</span>`;
-  $("homeGems").textContent = pet.gems;
+  $("homeGems").innerHTML = pet.gems +
+    (family.length ? `<small>いえに ${family.length}ひき ＋${Math.round((famBonus() - 1) * 100)}%</small>` : "");
   $("growBadge").classList.toggle("hide", !canEvolve());
   $("bookBtn").classList.toggle("ready", hasNewStory());
+  $("nextBtn").classList.toggle("hide", !canRetire());
+  $("growBtn").classList.toggle("hide", pet.stage >= 5 && canRetire());
   $("growBtn").classList.toggle("ready", canEvolve());
 }
 function start(){
@@ -1083,7 +1102,7 @@ function die(){
   const run = game.run, m = run.cam / PX_PER_M;
   const score = Math.floor(m) + game.bonus;
   // 拾ったクリスタルを持ち帰る（系統によっては多めに持てる）
-  const earned = Math.round(game.runGems * perk("gem"));
+  const earned = Math.round(game.runGems * perk("gem") * famBonus());
   pet.gems += earned; pet.total += earned; savePet();
   game.lastDeath = m; store.set("poyon_lastdeath_m", m);   // つぎに来たとき、ここが目印になる
   game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m };
@@ -1498,6 +1517,30 @@ function purchase(sku, done){
   }, 1000);
 }
 
+/* ---- 育てきったら、つぎの子 ----
+   第5段階まで行って、その道の最後の章を読んだら迎えられる。
+   前の子は小屋に残る。クリスタルは家のものなので、そのまま引き継ぐ。 */
+const canRetire = () => pet.stage >= 5 && story[skey(pet.line)] >= 5;
+
+function openRetire(){
+  game.ui = "retire";
+  $("reTitle").textContent = `${pet.name} と、ここまで来た`;
+  $("reText").innerHTML =
+    `${pet.name}は もう じゅうぶん もぐった。これからは小屋にいて、<br>` +
+    `つぎの子の稼ぎを 手伝ってくれる（クリスタル ＋10%）。<br>` +
+    `<span style="font-size:11px">クリスタルと小屋は そのまま。物語が もう一本 はじまる。</span>`;
+  $("retireView").classList.remove("hide");
+}
+function newChild(){
+  family.push({ name: pet.name, line: pet.line });
+  store.set("poyon_family", family);
+  pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
+  pet.line = "slime"; pet.stage = 1;
+  savePet(); refreshHome();
+  game.ui = null; $("retireView").classList.add("hide");
+  askIntroName();
+}
+
 function onPress(e){
   if(e && e.target && e.target.id === "mute") return;
   if(game.ui === "story"){ if($("stChoice").classList.contains("hide")) nvAdvance(); return; }
@@ -1537,6 +1580,9 @@ tapBtn("goBtn",   () => { if(!game.ui) start(); });
 tapBtn("growBtn", () => { if(!game.ui) openEvo(); });
 tapBtn("evoBack", closeEvo);
 tapBtn("bookBtn", () => { if(!game.ui) openBook(); });
+tapBtn("nextBtn", () => { if(!game.ui) openRetire(); });
+tapBtn("reBack", () => { game.ui = null; $("retireView").classList.add("hide"); });
+tapBtn("reOk", newChild);
 tapBtn("bookBack", () => { game.ui = null; $("bookView").classList.add("hide"); });
 tapBtn("stChoice", () => {
   $("storyView").classList.add("hide"); cancelAnimationFrame(NV.raf);
@@ -1581,13 +1627,17 @@ tapBtn("rHome", () => {
 /* はじめて開いたとき。名前をつけて、第1章を読んでから おうちに立つ。
    （いきなり「もぐる」だと第1章を読む機会がないため） */
 let introMode = false;
-function maybeIntro(){
-  if(store.get("poyon_intro_done", false)) return;
+function askIntroName(){
   introMode = true; game.ui = "name";
   $("nameLabel").textContent = "この子に なまえを つけて";
   $("nameNote").classList.remove("hide");
   $("nameInput").value = pet.name;
   $("nameView").classList.remove("hide");
+  setTimeout(() => { $("nameInput").focus(); $("nameInput").select(); }, 60);
+}
+function maybeIntro(){
+  if(store.get("poyon_intro_done", false)) return;
+  askIntroName();
 }
 $("nameInput").addEventListener("keydown", e => { if(e.key === "Enter") $("nameOk").click(); });
 
@@ -2307,6 +2357,16 @@ function drawHome(){
     put(IMG.crystal, cx + sd * (72 + a * 84), GY + 1 + b * 7, 14 + b * 8);
   }
   if(pile >= 16) put(IMG.chest, cx + 132, GY + 4, 32);
+
+  // 育てきった子たちは、小屋で暮らしている
+  // 階段の前をふさがないよう、窓の下あたりでくつろいでもらう
+  const spots = [252, 292, 328, 114];
+  family.slice(-4).forEach((f, i) => {
+    const fx = spots[i];
+    const k = Math.abs(Math.sin((game.time + i * 0.7) / 0.62 * Math.PI));
+    drawCreature(ctx, { line: f.line, stage: 5 }, fx, GY + 2 - k * 4, 30,
+                 { im: IMG.s1, sx: 1 + (1 - k) * 0.1, sy: 1 - (1 - k) * 0.1 });
+  });
 
   // ふだんはのんびり跳ねている。なでると大きくはずむ
   const happy = Math.max(0, game.petHappy);
