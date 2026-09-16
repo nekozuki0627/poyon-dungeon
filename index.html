@@ -16,7 +16,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 html,body{margin:0;height:100%;overflow:hidden;background:#DACCFF;overscroll-behavior:none;touch-action:none}
 body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;color:var(--ink)}
-canvas{display:block;position:fixed;inset:0}
+#cv{display:block;position:fixed;inset:0}
 .hide{display:none !important}
 
 .overlay{
@@ -24,9 +24,10 @@ canvas{display:block;position:fixed;inset:0}
   padding:24px;padding-bottom:calc(24px + 56px + env(safe-area-inset-bottom));
   text-align:center;pointer-events:none;
 }
+#titleView{justify-content:space-between}
 @media (max-aspect-ratio: 3/4){
-  .overlay{justify-content:flex-start;padding-top:max(9vh, calc(env(safe-area-inset-top) + 40px))}
-  #titleView .howto{position:fixed;left:0;right:0;bottom:calc(max(5vh,16px) + 56px + env(safe-area-inset-bottom));padding:0 24px}
+  .overlay:not(#titleView){justify-content:flex-start;padding-top:max(9vh, calc(env(safe-area-inset-top) + 40px))}
+  #titleView{padding-top:max(4vh, calc(env(safe-area-inset-top) + 16px))}
 }
 .logo{
   font-size:clamp(34px,10vw,58px);font-weight:900;letter-spacing:.04em;line-height:1.05;
@@ -40,7 +41,160 @@ canvas{display:block;position:fixed;inset:0}
   animation:blink 1.1s ease-in-out infinite;
 }
 @keyframes blink{50%{opacity:.35}}
-.best-line{margin-top:14px;font-size:14px;color:var(--gold);font-weight:700}
+.best-line{margin-top:10px;font-size:13px;color:var(--gold);font-weight:700}
+
+/* ---- おうち（タイトル）---- */
+.home-top{display:flex;flex-direction:column;align-items:center}
+/* 地面の高さは画面の縦幅で変わるので、canvas 側から --ground をもらって合わせる。
+   こうしないと、なまえの札がスライムに重なってしまう */
+.home-bottom{
+  position:fixed;left:0;right:0;top:var(--ground,60%);bottom:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  padding:6px 16px calc(56px + env(safe-area-inset-bottom));
+}
+.petname{
+  pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.9);border:3px solid #594236;border-radius:99px;
+  padding:6px 16px;font-size:18px;font-weight:900;color:#594236;box-shadow:0 4px 0 rgba(89,66,54,.22);
+}
+.petname small{font-size:11px;color:var(--dim);font-weight:800}
+.pettitle{margin-top:5px;font-size:13px;font-weight:800;color:#F3E6FF;text-shadow:0 2px 0 rgba(89,66,54,.55)}
+.gemline{
+  margin-top:7px;display:inline-block;background:rgba(255,255,255,.88);border-radius:99px;
+  padding:4px 16px;font-size:15px;font-weight:900;color:#3E8FB8;border:2px solid #594236;
+}
+.gemline b{color:#2E7C9E}
+.row{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:9px}
+.btn{
+  pointer-events:auto;font-family:inherit;cursor:pointer;font-weight:900;letter-spacing:.03em;
+  border:3px solid #594236;border-radius:99px;color:#594236;
+}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(89,66,54,.3) !important}
+.btn.go{margin-top:9px;padding:14px 36px;font-size:23px;color:#0F4A48;background:linear-gradient(180deg,#8CF6F2,#3ED8D2);box-shadow:0 6px 0 rgba(89,66,54,.35)}
+.btn.sub{padding:11px 20px;font-size:15px;background:linear-gradient(180deg,#FFFFFF,#EFE6FF);box-shadow:0 5px 0 rgba(89,66,54,.28)}
+.btn.sub.ready{background:linear-gradient(180deg,#FFE9A8,#F5C24A)}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.badge{
+  display:inline-block;margin-left:6px;background:#FF6B8E;color:#fff;border-radius:99px;
+  padding:1px 7px;font-size:11px;border:2px solid #594236;
+}
+
+/* ---- そだてる画面 ---- */
+#evoView .card{pointer-events:auto;max-height:86vh;overflow:auto}
+.evo-now{margin:4px 0 2px;font-size:15px;font-weight:900;color:#594236}
+.evo-now span{font-size:12px;color:var(--dim);font-weight:800;margin-left:6px}
+.cards{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin:12px 0 4px}
+.ecard{
+  pointer-events:auto;cursor:pointer;font-family:inherit;flex:0 0 calc(50% - 4px);min-width:0;
+  background:#fff;border:3px solid #594236;border-radius:16px;padding:8px 4px 9px;
+  box-shadow:0 5px 0 rgba(89,66,54,.22);display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.ecard:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(89,66,54,.22)}
+.ecard.off{opacity:.5}
+.ec-line{font-size:11px;font-weight:900;color:var(--dim);letter-spacing:.06em}
+.ec-name{font-size:13px;font-weight:900;color:#594236;line-height:1.2}
+.ec-desc{font-size:10px;color:#7A68A8;font-weight:700;line-height:1.35;min-height:4.1em}
+.ec-cost{margin-top:2px;font-size:12px;font-weight:900;color:#3E8FB8}
+.stars{letter-spacing:2px;font-size:11px;color:#EFAE2B}
+/* ---- おはなし（映画の見せ方）----
+   遊ぶところはポップなまま、読むところだけ落ち着いた作りにする。
+   明朝・レターボックス・字幕・章タイトルのカット。 */
+#storyView{padding:0;display:block;background:#000}
+.nv-bg{
+  position:fixed;inset:0;background:linear-gradient(180deg,var(--bg1,#3A3550),var(--bg2,#14121E));
+  transition:background 1.2s ease;
+}
+.nv-bg::after{                       /* まわりを落として、真ん中に目を寄せる */
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(115% 62% at 50% 40%, rgba(255,255,255,.10), rgba(0,0,0,.72));
+}
+.nv-grain{                           /* フィルムの粒子 */
+  position:fixed;inset:0;opacity:.12;mix-blend-mode:overlay;pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.6'/></svg>");
+}
+.nv-bar{position:fixed;left:0;right:0;height:max(7vh,44px);background:#000;z-index:3}
+.nv-bar.t{top:0}
+.nv-bar.b{bottom:0}
+#nvChar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(max(7vh,44px) + 176px);
+  filter:drop-shadow(0 14px 18px rgba(0,0,0,.55));
+}
+.nv-no{
+  position:fixed;top:max(7vh,44px);left:0;right:0;text-align:center;padding-top:12px;z-index:4;
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+  font-size:11px;letter-spacing:.42em;color:rgba(255,255,255,.5);
+}
+.nv-box{
+  position:fixed;left:0;right:0;bottom:max(7vh,44px);z-index:4;
+  padding:0 26px 26px;text-align:center;
+  background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.72) 46%);
+  padding-top:70px;
+}
+.nv-text{
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+  font-size:17px;line-height:2.0;color:#F3EEE3;min-height:4em;
+  text-shadow:0 2px 10px rgba(0,0,0,.9);letter-spacing:.04em;
+}
+.nv-next{
+  margin-top:8px;font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.45);
+  animation:blink 1.6s ease-in-out infinite;visibility:hidden;
+}
+/* 章のあたまに出すタイトル */
+.nv-card{
+  position:fixed;inset:0;z-index:6;background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;color:#F3EEE3;
+  animation:cardin 3.0s ease forwards;pointer-events:none;
+}
+@keyframes cardin{0%{opacity:0}18%{opacity:1}72%{opacity:1}100%{opacity:0;visibility:hidden}}
+.nv-cn{font-size:13px;letter-spacing:.6em;color:rgba(243,238,227,.65)}
+.nv-ct{font-size:29px;letter-spacing:.22em;font-weight:600}
+.nv-choice{
+  pointer-events:auto;position:fixed;left:26px;right:26px;z-index:5;
+  bottom:calc(max(7vh,44px) + 150px);
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-weight:400;
+  padding:17px 12px;font-size:17px;line-height:1.7;letter-spacing:.06em;
+  color:#F3EEE3;background:rgba(10,8,14,.72);border:1px solid rgba(243,238,227,.55);
+  border-radius:2px;box-shadow:none;
+  animation:fadein 1.6s ease forwards;opacity:0;
+}
+@keyframes fadein{to{opacity:1}}
+.nv-choice:active{transform:none;background:rgba(243,238,227,.16)}
+.nv-close{
+  pointer-events:auto;position:fixed;left:50%;transform:translateX(-50%);z-index:5;
+  bottom:calc(max(7vh,44px) - 32px);padding:6px 18px;font-size:11px;letter-spacing:.2em;
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-weight:400;
+  color:rgba(255,255,255,.75);background:transparent;border:1px solid rgba(255,255,255,.35);
+  border-radius:2px;box-shadow:none;
+}
+/* 読んでいる間は、広告も音のボタンも引っ込める */
+body.cinema #adbar, body.cinema #mute{display:none}
+.st-lock{font-size:13px;color:#8A79B5;font-weight:800;line-height:1.8;text-align:center;margin-top:6px}
+
+/* ---- おもいで（読み返し） ---- */
+.tabs{display:flex;gap:6px;justify-content:center;margin:10px 0 8px}
+.tab{
+  pointer-events:auto;cursor:pointer;font-family:inherit;font-weight:900;font-size:12px;
+  border:2px solid #594236;border-radius:99px;padding:6px 12px;background:#fff;color:#8A79B5;
+}
+.tab.on{background:#594236;color:#FFF3D6}
+.chap{
+  pointer-events:auto;cursor:pointer;font-family:inherit;width:100%;text-align:left;
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;
+  border:2px solid #594236;border-radius:12px;padding:9px 12px;background:#FFFBF2;
+  font-size:13px;font-weight:900;color:#594236;
+}
+.chap small{color:#B09A78;font-size:11px}
+.chap.locked{background:#EFE9F8;color:#A99BC4;border-color:#A99BC4;border-style:dashed}
+.chap.buy{background:linear-gradient(180deg,#FFE9A8,#F5C24A);border-color:#594236;color:#5A3A00}
+.price{margin-left:auto;font-size:12px;font-weight:900}
+.nameinput{
+  font-family:inherit;font-size:20px;font-weight:900;text-align:center;color:#594236;
+  border:3px solid #594236;border-radius:12px;padding:8px 10px;width:100%;margin:12px 0 4px;
+  background:#FFFDF7;pointer-events:auto;
+}
+#nameView .card{pointer-events:auto}
 .howto{margin-top:20px;font-size:13px;line-height:1.9;color:#6B5B90;background:rgba(255,255,255,.62);border-radius:16px;padding:10px 16px}
 .howto b{color:#594236}
 
@@ -60,6 +214,18 @@ canvas{display:block;position:fixed;inset:0}
 @keyframes pop{0%{transform:scale(.3)}100%{transform:scale(1)}}
 .r-gap{margin-top:8px;font-size:13px;color:var(--dim)}
 
+.revive{
+  pointer-events:auto;margin-top:14px;padding:14px 26px;border-radius:99px;
+  font-family:inherit;font-size:17px;font-weight:900;letter-spacing:.04em;cursor:pointer;
+  color:#3C2A00;background:linear-gradient(180deg,#FFE08A,#F0AE2B);
+  border:3px solid #594236;box-shadow:0 6px 0 rgba(89,66,54,.35);
+}
+.revive:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(89,66,54,.35)}
+.adbox{
+  margin:12px 0 6px;padding:26px 18px;border-radius:14px;
+  background:#EDE4FF;border:2px dashed #9A8ABC;color:#7A68A8;font-size:13px;font-weight:700;
+}
+.adcount{margin-top:10px;font-size:34px;font-weight:900;color:#5B4A86}
 #adbar{
   position:fixed;left:0;right:0;bottom:0;z-index:4;
   height:calc(56px + env(safe-area-inset-bottom));
@@ -79,12 +245,19 @@ canvas{display:block;position:fixed;inset:0}
 <canvas id="cv"></canvas>
 
 <div class="overlay" id="titleView">
-  <div class="logo">ぽよん<br>ダンジョン<small>POYON DUNGEON</small></div>
-  <div class="best-line hide" id="titleBest"></div>
-  <div class="tap">タップでスタート</div>
-  <div class="howto">
-    タップで<b>ジャンプ</b>、空中でもう1回タップで<b>2段ジャンプ</b><br>
-    トゲ・穴・コウモリをよけて、どこまで潜れるか
+  <div class="home-top">
+    <div class="logo">ぽよん<br>ダンジョン<small>POYON DUNGEON</small></div>
+    <div class="best-line hide" id="titleBest"></div>
+  </div>
+  <div class="home-bottom">
+    <div class="petname" id="petName">ぷに <small>✎</small></div>
+    <div class="pettitle" id="petTitle"></div>
+    <div class="gemline">💎 もちもの <b id="homeGems">0</b></div>
+    <button class="btn go" id="goBtn">▶　もぐる</button>
+    <div class="row">
+      <button class="btn sub" id="growBtn">そだてる<span class="badge hide" id="growBadge">！</span></button>
+      <button class="btn sub" id="bookBtn">おもいで</button>
+    </div>
   </div>
 </div>
 
@@ -96,8 +269,85 @@ canvas{display:block;position:fixed;inset:0}
     <div id="rNew"></div>
     <div class="r-best" id="rBest"></div>
     <div class="r-gap" id="rGap"></div>
+    <div class="gemline" id="rGems"></div>
   </div>
+  <button class="btn sub ready hide" id="rGrow" style="margin-top:12px">✨ そだてられる！</button>
+  <button class="revive hide" id="reviveBtn">▶　広告を見て復活</button>
   <div class="tap" id="rTap" style="visibility:hidden">タップでもう1回</div>
+</div>
+
+<!-- 動画広告の場所。いまは仮の画面で、本物の広告は showRewardAd() の中に入れる -->
+<div class="overlay hide" id="adView">
+  <div class="card" style="text-align:center">
+    <div class="r-label">ちょっと待ってね</div>
+    <div class="adbox">
+      <div>ここに動画広告が入ります</div>
+      <div class="adcount"><span id="adCount">5</span></div>
+    </div>
+    <div class="r-gap">見終わると その場から復活できる</div>
+  </div>
+</div>
+
+<div class="overlay hide" id="evoView">
+  <div class="card" style="min-width:min(336px,93vw)">
+    <div class="r-label">そだてる</div>
+    <div class="evo-now"><span id="evoName"></span><span id="evoTitle"></span></div>
+    <div class="gemline">💎 <b id="evoGems">0</b></div>
+    <div class="cards" id="evoCards"></div>
+    <div class="r-gap" id="evoNote"></div>
+    <button class="btn sub" id="evoBack" style="margin-top:12px">もどる</button>
+  </div>
+</div>
+
+<div class="overlay hide" id="storyView">
+  <div class="nv-bg" id="nvBg"></div>
+  <div class="nv-grain"></div>
+  <canvas id="nvChar"></canvas>
+  <div class="nv-no" id="stNo"></div>
+  <div class="nv-box">
+    <div class="nv-text" id="stText"></div>
+    <div class="nv-next" id="stNext">タップ</div>
+  </div>
+  <div class="nv-bar t"></div>
+  <div class="nv-bar b"></div>
+  <div class="nv-card hide" id="nvCard">
+    <div class="nv-cn" id="nvCn"></div>
+    <div class="nv-ct" id="nvCt"></div>
+  </div>
+  <button class="btn nv-choice hide" id="stChoice">あの子が不幸になるなんて、ありえない</button>
+  <button class="btn nv-close hide" id="stClose">とじる</button>
+</div>
+
+<div class="overlay hide" id="bookView">
+  <div class="card" style="min-width:min(336px,93vw);pointer-events:auto;max-height:86vh;overflow:auto">
+    <div class="r-label">おもいで</div>
+    <div class="tabs" id="bookTabs"></div>
+    <div id="bookList"></div>
+    <button class="btn sub" id="bookBack" style="margin-top:10px">もどる</button>
+  </div>
+</div>
+
+<!-- 課金の場所。いまは仮の画面で、本物は purchase() の中に入れる -->
+<div class="overlay hide" id="shopView">
+  <div class="card" style="text-align:center;pointer-events:auto">
+    <div class="r-label">すくいの しょう</div>
+    <div class="st-title" id="shopTitle" style="text-align:center;margin-top:8px"></div>
+    <div class="st-lock" id="shopText"></div>
+    <div class="adbox" id="shopBox" style="display:none">
+      <div>ここに購入画面が入ります</div>
+      <div class="adcount"><span id="shopCount">3</span></div>
+    </div>
+    <button class="btn sub ready" id="shopBuy" style="margin-top:14px">￥240 で よむ</button>
+    <button class="btn sub" id="shopBack" style="margin-top:8px">やめる</button>
+  </div>
+</div>
+
+<div class="overlay hide" id="nameView">
+  <div class="card" style="text-align:center">
+    <div class="r-label">なまえを つける</div>
+    <input class="nameinput" id="nameInput" maxlength="8" autocomplete="off">
+    <button class="btn sub" id="nameOk" style="margin-top:8px">けってい</button>
+  </div>
 </div>
 
 <div class="overlay hide" id="pauseView">
@@ -211,7 +461,8 @@ const CEIL_BOTTOM = -70;
    --------------------------------------------------------- */
 function makeRun(opt = {}){
   return {
-    cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0,
+    cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
+    gems: [], magnet: opt.magnet ?? 0,
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
     ev: [],   // 画面側に伝える出来事（着地・ジャンプなど）
@@ -267,6 +518,14 @@ function generate(run){
     const tEnd  = run._tEnd;
     const want  = tEnd + gapFor(m);
     const snapped = Math.ceil((want - JUMP_LEAD) / GRID) * GRID + JUMP_LEAD;
+    // クリスタルは「跳べば通る道すじ」に置く。拾うために無理をさせない
+    const r = Math.random();
+    if(r < 0.60){
+      const mid = (run.nextX + end) / 2;
+      for(let i = -1; i <= 1; i++) run.gems.push({ x: mid + i * 26, y: i === 0 ? -86 : -64, got: false });
+    }else if(r < 0.80){
+      run.gems.push({ x: end + 46, y: -R - 10, got: false });
+    }
     run.nextX = advanceBy(end, snapped - tEnd);
     run.tAt = snapped;
   }
@@ -274,6 +533,7 @@ function generate(run){
   const cut = run.cam - 100;
   run.obs  = run.obs.filter(o => (o.x + (o.w || 12)) > cut);
   run.pits = run.pits.filter(p => p.x1 > cut);
+  run.gems = run.gems.filter(q => !q.got && q.x > cut);
 }
 
 const inPit = (run, wx) => run.pits.some(p => wx > p.x0 && wx < p.x1);
@@ -296,6 +556,8 @@ function circleRect(cx, cy, r, x0, y0, x1, y1){
 function stepRun(run, dt){
   const P = run.P;
   if(P.dead) return;
+  if(run.inv > 0) run.inv -= dt;
+  const safe = run.inv > 0;        // 復活直後は当たらない
   const m = run.cam / PX_PER_M;
   run.v = run.fixedV ?? speedFor(m);
   run.cam += run.v * dt;
@@ -313,12 +575,21 @@ function stepRun(run, dt){
       if(!pit && !P.fallen){ P.y = -R; P.vy = 0; P.onGround = true; P.jumps = 0; run.ev.push("land"); }
       else if(P.y > -R + 6){ P.fallen = true; }
     }
-    if(P.fallen && !pit){ P.dead = "pit"; return; }   // 穴の中で壁にぶつかった
-    if(P.y > 70){ P.dead = "pit"; return; }
+    if(!safe && P.fallen && !pit){ P.dead = "pit"; return; }   // 穴の中で壁にぶつかった
+    if(!safe && P.y > 70){ P.dead = "pit"; return; }
   }
   if(P.y - R < CEIL){ P.y = CEIL + R; if(P.vy < 0) P.vy = 0; }
 
+  // クリスタル拾い（無敵でも拾える）
+  const pr = R + 13 + run.magnet;
+  for(const q of run.gems){
+    if(q.got || Math.abs(q.x - wx) > pr + 40) continue;
+    const dx = q.x - wx, dy = q.y - P.y;
+    if(dx * dx + dy * dy < pr * pr){ q.got = true; run.ev.push("gem"); }
+  }
+
   const hr = R * 0.78;   // 当たり判定は見た目より少し小さく（理不尽に感じさせない）
+  if(safe) return;
   for(const o of run.obs){
     if(o.x > wx + 60 || (o.x + (o.w || 12)) < wx - 60) continue;
     if(o.k === "spike"){
@@ -351,6 +622,8 @@ function resize(){
   cv.style.width = cw + "px"; cv.style.height = ch + "px";
   GY = Math.max(-CEIL, Math.round(H * 0.6));
   bandTop = GY + CEIL;
+  // おうちの文字・ボタンを地面の上に置くため、地面の高さを CSS に渡す
+  document.documentElement.style.setProperty("--ground", Math.round(GY * scale) + "px");
 }
 window.addEventListener("resize", resize);
 resize();
@@ -360,10 +633,195 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
 };
 
+/* =========================================================
+   育てているスライム
+   ---------------------------------------------------------
+   クリスタルを持ち帰ると進化のもとがたまる。
+   進化先は3系統×5段階。どれに進むかは毎回プレイヤーが選ぶ（系統の乗り換えも自由）。
+   進化しても当たり判定・ジャンプ力は変えない。
+   強くなって楽になってしまうと「腕前で深さが決まる」という芯が壊れるので、
+   効果はぜんぶ「稼ぎ」の側に付けてある。
+   ========================================================= */
+const LINES = ["slime", "beast", "human_m", "human_f"];
+const LINE_INFO = {
+  slime: {
+    label: "スライム", acc: "#FFD86B", perk: "gem",
+    desc: "クリスタルを 多めに 持ち帰る",
+    body:  ["#42E6E0", "#3FD5EA", "#38BEF0", "#5AA0F7", "#9A7BFF"],
+    names: ["ぽよん", "つやぽよ", "きらめきゼリー", "だいおうスライム", "スライムキング"],
+  },
+  beast: {
+    label: "けもの", acc: "#FFB25E", perk: "magnet",
+    desc: "はなれた クリスタルを 引きよせる",
+    body:  ["#42E6E0", "#FFC98F", "#FFB170", "#FF9257", "#F06A45"],
+    names: ["ぽよん", "みみぽよ", "もふしっぽ", "きばのけもの", "げんじゅうフェンリル"],
+  },
+  human_m: {
+    label: "ヒトガタ♂", acc: "#7FB3FF", perk: "rhythm", story: "human",
+    desc: "リズムの ボーナスが ふえる",
+    body:  ["#42E6E0", "#BEE0FF", "#9CCBFF", "#7FB3FF", "#6E93F2"],
+    names: ["ぽよん", "てのあるヒトガタ", "ことばのヒトガタ", "まなびのヒトガタ", "ヒトガタの少年"],
+  },
+  human_f: {
+    label: "ヒトガタ♀", acc: "#FF9FC8", perk: "rhythm", story: "human",
+    desc: "リズムの ボーナスが ふえる",
+    body:  ["#42E6E0", "#FFC6E2", "#FFA8D3", "#EE86C6", "#D98BE8"],
+    names: ["ぽよん", "てのあるヒトガタ", "ことばのヒトガタ", "まなびのヒトガタ", "ヒトガタの少女"],
+  },
+};
+// 段階ごとに生える飾り（うしろに描くもの／手前に描くものは PART 側で決める）
+const LINE_PARTS = {
+  slime: [[], ["gem"], ["gem", "drops"], ["gem", "crown"], ["gem", "crown", "aura"]],
+  beast: [[], ["ears"], ["ears", "tail"], ["ears", "tail", "mane"], ["ears", "tail", "mane", "horns"]],
+  human_m: [[], ["arms"], ["arms", "scarf"], ["arms", "scarf", "cap"], ["arms", "scarf", "cap", "cape"]],
+  human_f: [[], ["arms"], ["arms", "ribbon"], ["arms", "ribbon", "hat"], ["arms", "ribbon", "hat", "cape"]],
+};
+const SIZE_UP  = [1, 1.05, 1.10, 1.15, 1.20];      // 見た目だけ少し大きくなる
+const EVO_COST = [0, 0, 25, 70, 160, 350];         // その段階になるのに要るクリスタル
+const NAMES0 = ["ぷに", "もち", "ぽむ", "あおた", "ちゃぽ", "こはく", "るる", "みどり"];
+
+/* ---------------------------------------------------------
+   おはなし。
+   進化するたびに1章ひらく。系統ごとに行き先がちがう。
+   第5章のあとの「救いの章」だけは課金で開く（買わなくても話は完結する）。
+   --------------------------------------------------------- */
+const CH1 = { t: "ひろった日", p: [
+  "雨の日だった。物置の裏の、空きびんの中にいた。",
+  "手のひらにのせたら、ひやりとして、それから、ゆっくりあたたかくなった。",
+  "名前をつけた。それだけで、この子はこっちを見るようになった。",
+]};
+
+const STORY = {
+  slime: { label: "スライムのまま", ch: [ CH1,
+    { t: "おみやげ", p: [
+      "はじめて地下にもぐった日。帰ってきたこの子は、クリスタルを枕もとに並べた。",
+      "ひとつ、ふたつ。数えながら、こっちの顔を見ていた。",
+      "ほめてほしいんだ、と気づくのに三日かかった。",
+    ]},
+    { t: "大きくなる", p: [
+      "もぐるたびに、ひとまわり大きくなる。取りこんだものが、そのまま体になるらしい。",
+      "玄関でつっかえて、笑った。この子も、うれしそうにふるえた。",
+      "村の子どもが、背くらべをしに来るようになった。",
+    ]},
+    { t: "戸が閉まらない", p: [
+      "もう家に入れない。外で待つようになった。",
+      "夜、戸のすきまからこちらを見ている目が、月ごとに高くなっていく。",
+      "村の人が、この道を遠まわりして歩くようになった。",
+    ]},
+    { t: "討伐隊", p: [
+      "たいまつの列が、坂をのぼってくる。名前を呼んだら、この子は逃げた。",
+      "追ってくる人を、ひとりも取りこまないように。よけて、よけて、よけながら。",
+      "朝、戸の前にいた。傷だらけで、もう何も取りこめないくらい、小さくなって。",
+      "手のひらにのせたら、ひやりとして、",
+      "それから、あたたかくならなかった。",
+    ]},
+  ], rescue: { t: "もういちど、あたためる", p: [
+    "手のひらにのせたまま、ずっと、握っていた。",
+    "一日。二日。村の人が代わるがわる来て、何も言わずに帰っていった。",
+    "三日目の朝、ひやりとしたものが、ゆっくり、あたたかくなった。",
+    "取りこむ力は、もどらなかった。だからもう、大きくならない。",
+    "ちょうど、玄関の戸をくぐれるくらいの大きさで。",
+  ]}},
+
+  beast: { label: "けものの道", ch: [ CH1,
+    { t: "はやく帰りたい", p: [
+      "耳が生えた。音がよく聞こえるようになったらしい。",
+      "帰り道、名前を呼ぶ前に走りだすようになった。",
+      "早く会いたいんだと思った。たぶん、それは合っていた。",
+    ]},
+    { t: "しっぽ", p: [
+      "走るのが速くなった。地下から地上まで、前は半日。いまは一時間。",
+      "そのぶん長く、いっしょにいられる。",
+      "……はずだった。",
+    ]},
+    { t: "におい", p: [
+      "牙が生えた。獲物のにおいが分かるようになったという。",
+      "その日から、こっちのにおいが、分からなくなったらしい。",
+      "夜、寝顔をじっと見ている。何かを思い出そうとしている顔だった。",
+    ]},
+    { t: "遠吠え", p: [
+      "目がさめたら、いなかった。追いかけた。呼んだ。",
+      "振りかえって、逃げた。爪を地面に立てて、こっちに背を向けて。",
+      "傷つけたくなかったのだと、あとから分かった。",
+      "いまは、山の向こうにいる。毎晩、決まった時間に、こちらへ向かって吠える。",
+      "「おかえり」と言っているのか、「来るな」と言っているのか、もう分からない。",
+    ]},
+  ], rescue: { t: "においの おぼえかた", p: [
+    "毎晩おなじ時間に、戸口で返事をすることにした。名前を呼ぶだけ。",
+    "春がきて、冬がきて、また春がきた。",
+    "ある朝、戸の前に足あとがあった。次の朝には、足あととクリスタルがひとつ。",
+    "その次の朝、山のにおいをつけたまま、その子はこっちの手を嗅いで、しっぽを振った。",
+    "かしこさは、もどらなかった。でも、そこだけが残っていた。",
+  ]}},
+
+  human: { label: "人になりたかった", ch: [ CH1,
+    { t: "て", p: [
+      "手が生えた。指が五本。うまく動かせなくて、何度も落とす。",
+      "最初にしたのは、こっちの袖をつかむことだった。",
+    ]},
+    { t: "ことば", p: [
+      "本を読むようになった。読めるはずがないのに、ページをめくるのがこっちより速い。",
+      "ある夜、「おかえり」と言った。声はまだ、水の音みたいだった。",
+      "返事をするのに、少し時間がかかった。",
+    ]},
+    { t: "がっこう", p: [
+      "人の形になった。帽子と手袋で、街の学校に通わせた。",
+      "名前を書ける。計算ができる。詩を書く。先生が、この子をほめる。",
+      "うれしくて、うれしくて、帽子を深くかぶせるのを、忘れた。",
+    ]},
+    { t: "ばれた日", p: [
+      "雨だった。帽子が落ちて、髪の下から、透けたものが見えた。",
+      "だました、と誰かが叫んだ。魔物だ、と誰かが言った。",
+      "この子は、何も言い返さなかった。",
+      "言い返す言葉を、ぜんぶ知っていたのに。",
+      "逃げるとき、一度だけ振りかえって、口が動いた。読めた。「ごめんなさい」。",
+    ]},
+  ], rescue: { t: "海の町", p: [
+    "街を出た。汽車を三回乗りかえて、誰も知らない海辺の町に着いた。",
+    "その子は、帽子をかぶらなくなった。町の人は、たまに驚いて、それから慣れた。",
+    "「かしこい子ですね」と言われるたび、こっちが照れる。",
+    "ある日、その子が言った。",
+    "「わたしは、あなたと話すために、ぜんぶ覚えたの」",
+  ]}},
+};
+const PRICE = "￥240";
+
+const SLINES = ["slime", "beast", "human"];               // おはなしの本数（ヒトガタはオス・メスで同じ話）
+const SLABEL = { slime: "スライム", beast: "けもの", human: "ヒトガタ" };
+const skey = line => (LINE_INFO[line] && LINE_INFO[line].story) || line;
+const story  = store.get("poyon_story",  { slime: 1, beast: 1, human: 1 });   // 系統ごとに開いた章
+const rescue = store.get("poyon_rescue", { slime: false, beast: false, human: false });
+function saveStory(){ store.set("poyon_story", story); store.set("poyon_rescue", rescue); }
+
+const pet = {
+  name:  store.get("poyon_pet_name", null) || NAMES0[Math.floor(Math.random() * NAMES0.length)],
+  line:  store.get("poyon_pet_line", "slime"),
+  stage: store.get("poyon_pet_stage", 1),
+  gems:  store.get("poyon_gems", 0),
+};
+function savePet(){
+  store.set("poyon_pet_name", pet.name); store.set("poyon_pet_line", pet.line);
+  store.set("poyon_pet_stage", pet.stage); store.set("poyon_gems", pet.gems);
+}
+const formName = f => f.stage === 1 ? "ぽよん" : LINE_INFO[f.line].names[f.stage - 1];
+const bodyCol  = f => LINE_INFO[f.line].body[f.stage - 1];
+// いまの段階で効いている力。第1段階は何もなし
+function perk(kind){
+  const info = LINE_INFO[pet.line];
+  const n = pet.stage - 1;
+  if(info.perk !== kind || n <= 0) return kind === "magnet" ? 0 : 1;
+  if(kind === "gem")    return 1 + 0.20 * n;
+  if(kind === "rhythm") return 1 + 0.30 * n;
+  if(kind === "magnet") return 16 * n;
+  return 1;
+}
+const canEvolve = () => pet.stage < 5 && pet.gems >= EVO_COST[pet.stage + 1];
+
 const game = {
   mode: "title", run: null, best: store.get("poyon_best_m", 0), prevBest: 0,
+  ui: null, runGems: 0, evoT: 0, petHappy: 0,
   time: 0, parts: [], pops: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
-  combo: 0, bestCombo: 0, bonus: 0, bestDist: store.get("poyon_bestdist_m", 0),
+  combo: 0, bestCombo: 0, bonus: 0, revived: false, bestDist: store.get("poyon_bestdist_m", 0),
   muted: store.get("poyon_muted", false),
 };
 
@@ -551,6 +1009,9 @@ const SFX = {
   dead(){  tone(300, .45, "sawtooth", .12, .25); setTimeout(()=>tone(120,.3,"square",.08,.5), 80); },
   floor(){ tone(784, .1); setTimeout(()=>tone(1046, .18), 90); },
   rec(){   [784, 988, 1175, 1568].forEach((f,i) => setTimeout(()=>tone(f, .16), i*90)); },
+  gem(){   tone(1046, .09, "triangle", .10); setTimeout(()=>tone(1568, .12, "triangle", .08), 55); },
+  pet(){   tone(660, .1, "sine", .1, 1.5); },
+  evo(){   [523, 659, 784, 1046, 1318].forEach((f,i) => setTimeout(()=>tone(f, .22, "triangle", .12), i*110)); },
 };
 
 /* ---- 粒 ---- */
@@ -564,16 +1025,28 @@ function burst(x, y, n, col, spd, up = 0){
 /* ---- 進行 ---- */
 const $ = id => document.getElementById(id);
 function showTitle(){
-  game.mode = "title";
+  game.mode = "title"; game.ui = null;
   $("titleView").classList.remove("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
+  $("evoView").classList.add("hide"); $("nameView").classList.add("hide"); $("rGrow").classList.add("hide");
   if(game.best > 0){ $("titleBest").textContent = `ベスト ${Math.floor(game.best)}　（いちばん深く 地下${floorOf(game.bestDist)}階）`; $("titleBest").classList.remove("hide"); }
-  game.run = makeRun(); game.run.gen = false;   // 背景だけ流す
+  game.run = makeRun(); game.run.gen = false;   // おうちなので障害物は出さない
+  refreshHome();
+}
+// おうちの表示を今の状態に合わせる
+function refreshHome(){
+  $("petName").innerHTML = `${pet.name} <small>✎</small>`;
+  $("petTitle").innerHTML = `${formName(pet)}　<span class="stars">${"★".repeat(pet.stage)}${"☆".repeat(5 - pet.stage)}</span>`;
+  $("homeGems").textContent = pet.gems;
+  $("growBadge").classList.toggle("hide", !canEvolve());
+  $("bookBtn").classList.toggle("ready", hasNewStory());
+  $("growBtn").classList.toggle("ready", canEvolve());
 }
 function start(){
-  game.mode = "play";
-  game.run = makeRun();
+  game.mode = "play"; game.ui = null;
+  game.runGems = 0;
+  game.run = makeRun({ magnet: perk("magnet") });
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
-  game.combo = 0; game.bestCombo = 0; game.bonus = 0;
+  game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.revived = false;
   musicStart();
   game.prevBest = game.best;
   $("titleView").classList.add("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
@@ -583,6 +1056,9 @@ const floorOf = m => Math.floor(m / FLOOR_M) + 1;
 function die(){
   const run = game.run, m = run.cam / PX_PER_M;
   const score = Math.floor(m) + game.bonus;
+  // 拾ったクリスタルを持ち帰る（系統によっては多めに持てる）
+  const earned = Math.round(game.runGems * perk("gem"));
+  pet.gems += earned; savePet();
   if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
   game.mode = "dead"; game.deadAt = game.time; game.shake = 12; game.combo = 0;
   musicStop();
@@ -599,7 +1075,10 @@ function die(){
     $("rNew").innerHTML = isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "";
     $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
     const gap = Math.floor(game.best - score);
-    $("rGap").textContent = !isNew && gap > 0 ? `ベストまで あと ${gap}` : "";
+    $("rGap").textContent = (!isNew && gap > 0 ? `ベストまで あと ${gap}` : "") + (game.revived ? "　（復活を使った）" : "");
+    $("rGems").innerHTML = `💎 ＋${earned}${earned > game.runGems ? `<span style="font-size:11px;color:#C98016">（${game.runGems}＋おまけ）</span>` : ""}　もちもの <b>${pet.gems}</b>`;
+    $("rGrow").classList.toggle("hide", !canEvolve());
+    $("reviveBtn").classList.toggle("hide", game.revived);
     $("resultView").classList.remove("hide");
     $("rTap").style.visibility = "hidden";
     if(isNew && game.prevBest > 0) SFX.rec();
@@ -607,10 +1086,304 @@ function die(){
   }, 650);
 }
 
+/* 動画広告。いまは仮の画面（5秒数えて閉じる）。
+   本物を入れるときは、この中で広告を出して、見終わったら done() を呼ぶだけでよい。
+   アプリ版は AdMob のリワード広告、ブラウザ版は AdSense などを想定。 */
+function showRewardAd(done){
+  const v = $("adView");
+  $("resultView").classList.add("hide");
+  v.classList.remove("hide");
+  let left = 5;
+  $("adCount").textContent = left;
+  const t = setInterval(() => {
+    left--;
+    $("adCount").textContent = Math.max(0, left);
+    if(left <= 0){ clearInterval(t); v.classList.add("hide"); done(); }
+  }, 1000);
+}
+
+function revive(){
+  const run = game.run;
+  game.revived = true;
+  // 目の前を片づける。復活した瞬間にまたぶつかると、広告を見た意味がなくなる
+  const from = run.cam - 60, to = run.cam + W + 280;
+  run.obs  = run.obs.filter(o => (o.x + (o.w || 12)) < from || o.x > to);
+  run.pits = run.pits.filter(q => q.x1 < from || q.x0 > to);
+  if(run.nextX < to){ run.nextX = to; run.tAt = travelTime(PX, run.nextX); }
+  Object.assign(run.P, { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null });
+  run.inv = 1.6;                    // しばらく無敵
+  game.combo = 0; game.parts = []; game.pops = [];
+  game.shake = 0; game.mode = "play";
+  burst(PX, GY, 18, "#FFD13B", 200, 60);
+  SFX.floor();
+  musicStart();
+}
+
+/* ---- そだてる ---- */
+function openEvo(){
+  game.ui = "evo";
+  $("resultView").classList.add("hide");
+  $("evoName").textContent = pet.name;
+  $("evoTitle").textContent = `／ ${formName(pet)}（第${pet.stage}段階）`;
+  $("evoGems").textContent = pet.gems;
+  const box = $("evoCards"); box.innerHTML = "";
+  if(pet.stage >= 5){
+    $("evoNote").textContent = "これ以上は進化できない。もう立派なものだ。";
+  }else{
+    const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost;
+    $("evoNote").textContent = ok ? "どの姿になるかは、きみが決めていい" : `あと 💎${cost - pet.gems} で進化できる`;
+    for(const line of LINES){
+      const info = LINE_INFO[line];
+      const el = document.createElement("button");
+      el.className = "ecard" + (ok ? "" : " off");
+      el.appendChild(formThumb(line, next, 82));
+      el.insertAdjacentHTML("beforeend",
+        `<div class="ec-line">${info.label}</div>
+         <div class="ec-name">${info.names[next - 1]}</div>
+         <div class="ec-desc">${info.desc}</div>
+         <div class="ec-cost">💎 ${cost}</div>`);
+      el.addEventListener("pointerdown", ev => { ev.stopPropagation(); ev.preventDefault(); doEvolve(line); });
+      box.appendChild(el);
+    }
+  }
+  $("evoView").classList.remove("hide");
+}
+function closeEvo(){ game.ui = null; $("evoView").classList.add("hide"); }
+
+function doEvolve(line){
+  if(pet.stage >= 5) return;
+  const next = pet.stage + 1, cost = EVO_COST[next];
+  if(pet.gems < cost) return;
+  pet.gems -= cost; pet.line = line; pet.stage = next; savePet();
+  unlockStory(skey(line), next);
+  closeEvo();
+  if(game.mode !== "title") showTitle();
+  refreshHome();
+  game.evoT = 1.1; game.petHappy = 1.6;
+  SFX.evo();
+  burst(W / 2, GY - 40, 46, "#FFE9A8", 280, 110);
+  setTimeout(() => { if(game.mode === "title" && !game.ui) openStory(skey(line), next); }, 900);
+}
+
+/* ---- おはなし（ノベル風に1文ずつ）---- */
+// 章ごとの空の色。雨の日／ふだん／最後の夜／救いの朝
+const NV_BG = {
+  rain:  ["#7E8AA8", "#464F6B"],
+  home:  ["#DDD0FF", "#9E84D0"],
+  night: ["#3A2E4E", "#140F22"],
+  dawn:  ["#FFE2B0", "#FFB68A"],
+};
+/* 読んでいる間だけ流す、静かな和音。ゆっくり変わるだけ（遊ぶときの曲とは別もの） */
+let stTimer = null;
+const SAD = [[9, 12, 16], [5, 9, 12], [0, 4, 7], [7, 11, 14]];   // Am → F → C → G
+function storyMusic(on){
+  clearInterval(stTimer); stTimer = null;
+  if(!on) return;
+  if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; } }
+  if(actx.state === "suspended") actx.resume();
+  let i = 0;
+  const play = () => {
+    if(game.muted || !actx) return;
+    const t = actx.currentTime + 0.05, ch = SAD[i % 4];
+    for(const n of ch) at(HZ(n - 24), t, 3.8, "sine", 0.045, { attack: 1.0 });
+    at(HZ(ch[2]), t + 0.5, 2.4, "triangle", 0.022, { attack: 0.25, echo: true });
+    i++;
+  };
+  play(); stTimer = setInterval(play, 3700);
+}
+
+const NV = { key: null, n: 1, i: 0, lines: [], typing: null, done: false, raf: 0, alpha: 1, want: 1, lock: false };
+const KANJI = ["", "一", "二", "三", "四", "五"];
+
+function openStory(key, n){
+  const d = n === 0 ? STORY[key].rescue : STORY[key].ch[n - 1];
+  game.ui = "story";
+  NV.key = key; NV.n = n; NV.i = 0; NV.lines = d.p; NV.alpha = n === 0 ? 0 : 1; NV.want = 1;
+  const no = n === 0 ? "救いの章" : `第${KANJI[n]}章`;
+  $("stNo").textContent = STORY[key].label;
+  $("stChoice").classList.add("hide"); $("stClose").classList.add("hide");
+  $("stText").textContent = ""; $("stNext").style.visibility = "hidden";
+  const bg = NV_BG[n === 1 ? "rain" : n === 5 ? "night" : n === 0 ? "dawn" : "home"];
+  $("nvBg").style.setProperty("--bg1", bg[0]);
+  $("nvBg").style.setProperty("--bg2", bg[1]);
+  document.body.classList.add("cinema");
+  storyMusic(true);
+  $("storyView").classList.remove("hide");
+  nvStand();
+  // 章のタイトルを一枚はさむ（映画のあれ）
+  const card = $("nvCard");
+  $("nvCn").textContent = no; $("nvCt").textContent = d.t;
+  card.classList.remove("hide");
+  card.style.animation = "none"; void card.offsetWidth; card.style.animation = "";
+  NV.lock = true;
+  setTimeout(() => {
+    card.classList.add("hide"); NV.lock = false;
+    if(game.ui === "story") nvLine();
+  }, 3000);
+}
+// 立ち絵。その章の段階の姿で、ゆっくり呼吸させる
+function nvStand(){
+  const c = $("nvChar"), g = c.getContext("2d");
+  const size = Math.min(210, Math.round(window.innerWidth * 0.55));
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  c.width = size * d; c.height = size * d;
+  c.style.width = size + "px"; c.style.height = size + "px";
+  g.scale(d, d);
+  const line = NV.key === "human"
+    ? (pet.line.indexOf("human") === 0 ? pet.line : "human_f")
+    : NV.key;
+  const stage = NV.n === 0 ? 5 : NV.n;
+  cancelAnimationFrame(NV.raf);
+  const loop = () => {
+    const t = performance.now() / 1000;
+    NV.alpha += (NV.want - NV.alpha) * 0.04;
+    g.clearRect(0, 0, size, size);
+    g.globalAlpha = Math.max(0, Math.min(1, NV.alpha));
+    g.filter = "saturate(.78) brightness(.86) contrast(1.05)";   // 場の色になじませる
+    const k = Math.abs(Math.sin(t / 0.95 * Math.PI));
+    drawCreature(g, { line, stage }, size / 2, size * 0.95 - k * 3, size * 0.40,
+                 { im: IMG.s1, t, sx: 1 + (1 - k) * 0.05, sy: 1 - (1 - k) * 0.05 });
+    g.filter = "none"; g.globalAlpha = 1;
+    NV.raf = requestAnimationFrame(loop);
+  };
+  loop();
+}
+function nvLine(){
+  const text = NV.lines[NV.i];
+  NV.done = false;
+  $("stText").textContent = "";
+  $("stNext").style.visibility = "hidden";
+  clearInterval(NV.typing);
+  let i = 0;
+  NV.typing = setInterval(() => {
+    i++;
+    $("stText").textContent = text.slice(0, i);
+    if(i >= text.length){ clearInterval(NV.typing); nvReady(); }
+  }, NV.n === 5 || NV.n === 0 ? 52 : 36);
+  // 最後の一文で、その子は消える（救いの章では逆に、ゆっくり現れる）
+  const last = NV.i === NV.lines.length - 1;
+  if(NV.n === 5 && last) NV.want = 0.12;
+  if(NV.n === 0) NV.want = Math.min(1, 0.25 + NV.i * 0.3);
+}
+function nvReady(){
+  NV.done = true;
+  $("stNext").style.visibility = "visible";
+}
+function nvAdvance(){
+  if(NV.lock) return;
+  if(!NV.done){                       // まだ出ている途中なら、全部出す
+    clearInterval(NV.typing);
+    $("stText").textContent = NV.lines[NV.i];
+    nvReady(); return;
+  }
+  if(NV.i < NV.lines.length - 1){ NV.i++; nvLine(); return; }
+  // 読み終わり
+  $("stNext").style.visibility = "hidden";
+  if(NV.n === 5 && !rescue[NV.key]){ $("stChoice").classList.remove("hide"); return; }
+  closeStory();
+}
+function closeStory(){
+  clearInterval(NV.typing); cancelAnimationFrame(NV.raf); storyMusic(false);
+  document.body.classList.remove("cinema");
+  game.ui = null; $("storyView").classList.add("hide");
+  if(game.mode === "title") refreshHome();
+}
+function unlockStory(key, n){
+  if(story[key] < n){ story[key] = n; saveStory(); }
+}
+const hasNewStory = () => SLINES.some(k => story[k] >= 5 && !rescue[k]);
+
+/* ---- おもいで（読み返し） ---- */
+let bookLine = "slime";
+function openBook(){
+  game.ui = "book"; bookLine = skey(pet.line);
+  renderBook(); $("bookView").classList.remove("hide");
+}
+function renderBook(){
+  const tabs = $("bookTabs"); tabs.innerHTML = "";
+  for(const l of SLINES){
+    const b = document.createElement("button");
+    b.className = "tab" + (l === bookLine ? " on" : "");
+    b.textContent = SLABEL[l];
+    b.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); bookLine = l; renderBook(); });
+    tabs.appendChild(b);
+  }
+  const list = $("bookList"); list.innerHTML = "";
+  const open = story[bookLine];
+  for(let n = 1; n <= 5; n++){
+    const b = document.createElement("button");
+    const ok = n <= open;
+    b.className = "chap" + (ok ? "" : " locked");
+    b.innerHTML = ok
+      ? `<small>第${n}章</small> ${STORY[bookLine].ch[n - 1].t}`
+      : `<small>第${n}章</small> 🔒 第${n}段階まで育てると読める`;
+    if(ok) b.addEventListener("pointerdown", e => {
+      e.stopPropagation(); e.preventDefault();
+      $("bookView").classList.add("hide"); openStory(bookLine, n);
+    });
+    list.appendChild(b);
+  }
+  const b = document.createElement("button");
+  if(rescue[bookLine]){
+    b.className = "chap";
+    b.innerHTML = `<small>救いの章</small> ${STORY[bookLine].rescue.t}`;
+    b.addEventListener("pointerdown", e => {
+      e.stopPropagation(); e.preventDefault();
+      $("bookView").classList.add("hide"); openStory(bookLine, 0);
+    });
+  }else if(open >= 5){
+    b.className = "chap buy";
+    b.innerHTML = `<small>救いの章</small> このさきがある<span class="price">${PRICE}</span>`;
+    b.addEventListener("pointerdown", e => {
+      e.stopPropagation(); e.preventDefault();
+      $("bookView").classList.add("hide"); openShop(bookLine);
+    });
+  }else{
+    b.className = "chap locked";
+    b.innerHTML = `<small>救いの章</small> 🔒 最後まで育てると出てくる`;
+  }
+  list.appendChild(b);
+}
+
+/* ---- 救いの章（課金）----
+   いまは仮の画面（3秒数えて開く）。
+   本物を入れるときは、この purchase() の中で支払いを呼んで、買えたら done() を呼ぶだけでよい。
+   アプリ版は Google Play のアプリ内課金、ブラウザ版は Stripe などを想定。 */
+let shopLine = "slime";
+function openShop(line){
+  shopLine = line; game.ui = "shop";
+  $("shopTitle").textContent = STORY[line].label;
+  $("shopText").innerHTML = "……そのあとの話が、ひとつだけ残っています。<br><span style=\"font-size:11px\">買わなくても、この子の物語はここで完結しています。</span>";
+  $("shopBox").style.display = "none";
+  $("shopBuy").classList.remove("hide"); $("shopBack").classList.remove("hide");
+  $("shopBuy").textContent = `${PRICE} で よむ`;
+  $("shopView").classList.remove("hide");
+}
+function purchase(sku, done){
+  $("shopBox").style.display = "";
+  $("shopBuy").classList.add("hide"); $("shopBack").classList.add("hide");
+  let left = 3;
+  $("shopCount").textContent = left;
+  const t = setInterval(() => {
+    left--;
+    $("shopCount").textContent = Math.max(0, left);
+    if(left <= 0){ clearInterval(t); done(); }
+  }, 1000);
+}
+
 function onPress(e){
   if(e && e.target && e.target.id === "mute") return;
+  if(game.ui === "story"){ if($("stChoice").classList.contains("hide")) nvAdvance(); return; }
+  if(game.ui) return;
+  if(e && e.target && e.target.id === "reviveBtn") return;
+  if(game.mode === "ad") return;
   if(e && e.cancelable) e.preventDefault();
-  if(game.mode === "title"){ start(); return; }
+  // おうちでは、なでると喜ぶ（ボタンを押したときは start / そだてる が動く）
+  if(game.mode === "title"){
+    game.petHappy = 1.0; SFX.pet();
+    burst(W / 2, GY - 60, 7, "#FF8FB0", 120, 70);
+    return;
+  }
   if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); musicStart(); return; }
   if(game.mode === "dead"){
     // 結果が出てすぐのタップでは始めない（死んだ瞬間の連打で飛ばさないため）
@@ -624,6 +1397,49 @@ window.addEventListener("keydown", e => { if(e.code === "Space" || e.code === "A
 document.addEventListener("visibilitychange", () => {
   if(document.hidden && game.mode === "play"){ game.mode = "paused"; $("pauseView").classList.remove("hide"); musicStop(); }
 });
+$("reviveBtn").addEventListener("pointerdown", e => {
+  e.stopPropagation(); e.preventDefault();
+  if(game.mode !== "dead" || game.revived) return;
+  game.mode = "ad";
+  showRewardAd(revive);
+});
+function tapBtn(id, fn){
+  $(id).addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); fn(); });
+}
+tapBtn("goBtn",   () => { if(!game.ui) start(); });
+tapBtn("growBtn", () => { if(!game.ui) openEvo(); });
+tapBtn("evoBack", closeEvo);
+tapBtn("bookBtn", () => { if(!game.ui) openBook(); });
+tapBtn("bookBack", () => { game.ui = null; $("bookView").classList.add("hide"); });
+tapBtn("stChoice", () => {
+  $("storyView").classList.add("hide"); cancelAnimationFrame(NV.raf);
+  document.body.classList.remove("cinema");
+  openShop(NV.key);
+});
+tapBtn("stClose", closeStory);
+tapBtn("shopBack", () => { storyMusic(false); game.ui = null; $("shopView").classList.add("hide"); refreshHome(); });
+tapBtn("shopBuy", () => {
+  purchase("rescue_" + shopLine, () => {
+    rescue[shopLine] = true; saveStory();
+    $("shopView").classList.add("hide");
+    SFX.rec(); openStory(shopLine, 0);
+  });
+});
+tapBtn("rGrow",   () => { showTitle(); openEvo(); });
+tapBtn("petName", () => {
+  game.ui = "name";
+  $("nameInput").value = pet.name;
+  $("nameView").classList.remove("hide");
+  setTimeout(() => { $("nameInput").focus(); $("nameInput").select(); }, 50);
+});
+tapBtn("nameOk", () => {
+  const v = $("nameInput").value.trim().slice(0, 8);
+  if(v) pet.name = v;
+  savePet(); refreshHome();
+  game.ui = null; $("nameView").classList.add("hide");
+});
+$("nameInput").addEventListener("keydown", e => { if(e.key === "Enter") $("nameOk").click(); });
+
 $("mute").addEventListener("pointerdown", e => {
   e.stopPropagation();
   game.muted = !game.muted; store.set("poyon_muted", game.muted);
@@ -878,6 +1694,274 @@ function drawObstacles(run){
   }
 }
 
+/* ---------------------------------------------------------
+   進化した姿。
+   体は Gemini に描いてもらったスライムの絵を色だけ塗りかえて使い、
+   耳・しっぽ・かんむりなどの飾りをその場で描き足す。
+   （15通りの絵を用意しなくても、段階ごとに別人に見える）
+   --------------------------------------------------------- */
+const TINT = {};
+function tinted(im, col){
+  if(!ready(im)) return null;
+  const key = im.src + col;
+  if(TINT[key]) return TINT[key];
+  const c = document.createElement("canvas");
+  c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const g = c.getContext("2d");
+  g.drawImage(im, 0, 0);
+  g.globalCompositeOperation = "color";        // 色みだけ差し替え、陰影はそのまま残す
+  g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = "destination-in";
+  g.drawImage(im, 0, 0);                        // はみ出した色を絵の形で切り抜く
+  TINT[key] = c;
+  return c;
+}
+
+function star(g, x, y, R1, R2, n){
+  g.beginPath();
+  for(let i = 0; i < n * 2; i++){
+    const a = -Math.PI / 2 + i * Math.PI / n, r = i % 2 ? R2 : R1;
+    if(i) g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    else  g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  g.closePath();
+}
+
+/* 飾り。P = { g, cx, top, w, hh, baseY, ink, acc, col, t }
+   back:true はからだの後ろに描く */
+const PART = {
+  ears: { back: true, draw(P){
+    const { g, cx, top, w, hh, ink, acc } = P;
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink;
+    for(const sd of [-1, 1]){
+      g.save(); g.translate(cx + sd * w * 0.24, top + hh * 0.32); g.rotate(sd * 0.30);
+      g.beginPath();
+      g.moveTo(-w * 0.14, 4);
+      g.quadraticCurveTo(-w * 0.12, -hh * 0.40, 0, -hh * 0.52);
+      g.quadraticCurveTo(w * 0.12, -hh * 0.40, w * 0.14, 4);
+      g.closePath(); g.fillStyle = acc; g.fill(); g.stroke();
+      g.beginPath();
+      g.moveTo(-w * 0.06, 1);
+      g.quadraticCurveTo(-w * 0.05, -hh * 0.26, 0, -hh * 0.34);
+      g.quadraticCurveTo(w * 0.05, -hh * 0.26, w * 0.06, 1);
+      g.closePath(); g.fillStyle = "#FFD2DE"; g.fill();
+      g.restore();
+    }
+  }},
+  tail: { back: true, draw(P){
+    const { g, cx, baseY, w, hh, ink, acc, t } = P;
+    g.save();
+    g.translate(cx - w * 0.32, baseY - hh * 0.30);
+    g.rotate(-0.30 + Math.sin(t * 3.2) * 0.22);
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.bezierCurveTo(-w * 0.52, -hh * 0.02, -w * 0.50, -hh * 0.66, -w * 0.14, -hh * 0.58);
+    g.bezierCurveTo(-w * 0.32, -hh * 0.40, -w * 0.26, -hh * 0.10, 0, -hh * 0.16);
+    g.closePath();
+    g.fillStyle = acc; g.fill();
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink; g.stroke();
+    g.restore();
+  }},
+  mane: { back: true, draw(P){
+    const { g, cx, baseY, w, hh, ink, acc } = P;
+    const cy = baseY - hh * 0.30, rx = w * 0.50, ry = hh * 0.28, n = 11, r = w * 0.17;
+    g.lineWidth = 3; g.strokeStyle = ink;
+    for(let i = 0; i < n; i++){ const a = Math.PI * 2 * i / n;
+      g.beginPath(); g.arc(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, r, 0, 7); g.stroke(); }
+    g.fillStyle = acc;
+    for(let i = 0; i < n; i++){ const a = Math.PI * 2 * i / n;
+      g.beginPath(); g.arc(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, r, 0, 7); g.fill(); }
+  }},
+  horns: { back: true, draw(P){
+    const { g, cx, top, w, hh, ink } = P;
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink;
+    for(const sd of [-1, 1]){
+      g.save(); g.translate(cx + sd * w * 0.34, top + hh * 0.30); g.scale(sd, 1);
+      g.beginPath();
+      g.moveTo(-w * 0.05, 2);
+      g.quadraticCurveTo(w * 0.04, -hh * 0.32, w * 0.24, -hh * 0.48);
+      g.quadraticCurveTo(w * 0.06, -hh * 0.22, w * 0.10, 2);
+      g.closePath(); g.fillStyle = "#FFF1D6"; g.fill(); g.stroke();
+      g.restore();
+    }
+  }},
+  cape: { back: true, draw(P){
+    const { g, cx, top, w, hh, ink } = P;
+    const y0 = top + hh * 0.26;
+    g.beginPath();
+    g.moveTo(cx - w * 0.28, y0);
+    g.quadraticCurveTo(cx - w * 0.92, y0 + hh * 0.50, cx - w * 0.66, y0 + hh * 0.84);
+    g.quadraticCurveTo(cx - w * 0.10, y0 + hh * 0.66, cx + w * 0.30, y0 + hh * 0.80);
+    g.closePath();
+    g.fillStyle = "#E0587C"; g.fill();
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink; g.stroke();
+  }},
+  drops: { back: true, draw(P){
+    const { g, cx, top, hh, w, t, col, ink } = P;
+    for(let i = 0; i < 3; i++){
+      const a = t * 1.5 + i * Math.PI * 2 / 3;
+      const x = cx + Math.cos(a) * w * 0.78, y = top + hh * 0.42 + Math.sin(a * 1.3) * hh * 0.26;
+      g.save(); g.translate(x, y);
+      g.beginPath(); g.moveTo(0, -7); g.quadraticCurveTo(5.5, 0.5, 0, 5); g.quadraticCurveTo(-5.5, 0.5, 0, -7);
+      g.closePath(); g.fillStyle = col; g.fill();
+      g.lineWidth = 2; g.lineJoin = "round"; g.strokeStyle = ink; g.stroke();
+      g.restore();
+    }
+  }},
+  aura: { back: true, draw(P){
+    const { g, cx, top, hh, w, t } = P;
+    g.save();                          // 透明度をいじるので、外に影響させない
+    const cy = top + hh * 0.55, r = Math.max(w, hh) * 0.95 + Math.sin(t * 2) * 3;
+    const gr = g.createRadialGradient(cx, cy, r * 0.35, cx, cy, r);
+    gr.addColorStop(0, "rgba(255,229,140,.55)"); gr.addColorStop(1, "rgba(255,229,140,0)");
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+    const a0 = g.globalAlpha;
+    for(let i = 0; i < 5; i++){
+      const a = t * 1.1 + i * 1.26;
+      g.globalAlpha = a0 * (0.55 + 0.45 * Math.sin(t * 4 + i));
+      g.fillStyle = "#FFF6C4";
+      g.beginPath(); g.arc(cx + Math.cos(a) * r * 0.78, cy + Math.sin(a) * r * 0.52, 2.3, 0, 7); g.fill();
+    }
+    g.restore();
+  }},
+  gem: { draw(P){
+    const { g, cx, top, hh, w, ink, acc } = P;
+    const cy = top + hh * 0.20, r = w * 0.13;
+    g.save(); g.translate(cx, cy);
+    g.beginPath(); g.moveTo(0, -r * 1.25); g.lineTo(r, 0); g.lineTo(0, r * 1.25); g.lineTo(-r, 0); g.closePath();
+    g.fillStyle = acc; g.fill();
+    g.lineWidth = 2.5; g.lineJoin = "round"; g.strokeStyle = ink; g.stroke();
+    g.fillStyle = "rgba(255,255,255,.75)";
+    g.beginPath(); g.moveTo(-r * 0.15, -r * 0.7); g.lineTo(r * 0.35, -r * 0.05); g.lineTo(-r * 0.15, r * 0.2); g.closePath(); g.fill();
+    g.restore();
+  }},
+  crown: { draw(P){
+    const { g, cx, top, w, hh, ink } = P;
+    const cw = w * 0.52, ch = hh * 0.26, y = top + hh * 0.20 - ch, x = cx - cw / 2;
+    g.beginPath();
+    g.moveTo(x, y + ch); g.lineTo(x, y);
+    g.lineTo(x + cw * 0.25, y + ch * 0.48);
+    g.lineTo(x + cw * 0.50, y - ch * 0.18);
+    g.lineTo(x + cw * 0.75, y + ch * 0.48);
+    g.lineTo(x + cw, y); g.lineTo(x + cw, y + ch);
+    g.closePath();
+    const gr = g.createLinearGradient(0, y - ch * 0.2, 0, y + ch);
+    gr.addColorStop(0, "#FFECB3"); gr.addColorStop(1, "#EFAE2B");
+    g.fillStyle = gr; g.fill();
+    g.lineWidth = 3; g.lineJoin = "round"; g.strokeStyle = ink; g.stroke();
+    g.fillStyle = "#FF6B8E"; g.beginPath(); g.arc(cx, y + ch * 0.60, w * 0.055, 0, 7); g.fill();
+  }},
+  arms: { draw(P){
+    const { g, cx, top, hh, w, ink, col, t } = P;
+    for(const sd of [-1, 1]){
+      g.save();
+      g.translate(cx + sd * w * 0.46, top + hh * 0.56);
+      g.rotate(sd * (0.55 + Math.sin(t * 4 + (sd > 0 ? 0 : 1.6)) * 0.30));
+      g.beginPath(); g.ellipse(0, hh * 0.15, w * 0.11, hh * 0.20, 0, 0, 7);
+      g.fillStyle = col; g.fill();
+      g.lineWidth = 3; g.strokeStyle = ink; g.stroke();
+      g.restore();
+    }
+  }},
+  hat: { draw(P){
+    const { g, cx, top, w, hh, ink, acc } = P;
+    g.save(); g.translate(cx + w * 0.05, top + hh * 0.16); g.rotate(0.15);
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink;
+    g.beginPath();
+    g.moveTo(-w * 0.32, 0);
+    g.quadraticCurveTo(-w * 0.06, -hh * 0.32, -w * 0.14, -hh * 0.88);
+    g.quadraticCurveTo(w * 0.16, -hh * 0.44, w * 0.32, 0);
+    g.closePath(); g.fillStyle = acc; g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(0, 0, w * 0.44, hh * 0.09, 0, 0, 7);
+    g.fillStyle = acc; g.fill(); g.stroke();
+    g.fillStyle = "#FFE9A8"; g.lineWidth = 2;
+    g.beginPath(); g.arc(-w * 0.02, -hh * 0.14, w * 0.07, 0, 7); g.fill(); g.stroke();
+    g.restore();
+  }},
+  scarf: { draw(P){
+    const { g, cx, baseY, hh, w, ink, acc, t } = P;
+    const y = baseY - hh * 0.20;
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink; g.fillStyle = acc;
+    g.beginPath(); g.ellipse(cx, y, w * 0.34, hh * 0.09, 0, 0, 7); g.fill(); g.stroke();
+    g.save(); g.translate(cx - w * 0.26, y); g.rotate(-0.25 + Math.sin(t * 2.4) * 0.16);
+    g.beginPath();
+    g.moveTo(-w * 0.07, 0); g.lineTo(-w * 0.16, hh * 0.44); g.lineTo(w * 0.01, hh * 0.46); g.lineTo(w * 0.07, 0);
+    g.closePath(); g.fill(); g.stroke();
+    g.restore();
+  }},
+  cap: { draw(P){
+    const { g, cx, top, w, hh, ink, acc } = P;
+    const y = top + hh * 0.18;
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink;
+    g.beginPath(); g.ellipse(cx, y, w * 0.40, hh * 0.22, 0, Math.PI, 0); g.closePath();
+    g.fillStyle = acc; g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(cx + w * 0.16, y + hh * 0.02, w * 0.34, hh * 0.06, 0, 0, 7);
+    g.fillStyle = "#3E5C8A"; g.fill(); g.stroke();
+    g.fillStyle = "#FFE9A8"; g.beginPath(); g.arc(cx, y - hh * 0.10, w * 0.055, 0, 7); g.fill();
+  }},
+  ribbon: { draw(P){
+    const { g, cx, top, w, hh, ink, acc } = P;
+    const y = top + hh * 0.16, r = w * 0.15;
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = ink; g.fillStyle = acc;
+    for(const sd of [-1, 1]){
+      g.beginPath();
+      g.moveTo(cx, y);
+      g.quadraticCurveTo(cx + sd * r * 2.1, y - r * 1.5, cx + sd * r * 2.0, y + r * 0.15);
+      g.quadraticCurveTo(cx + sd * r * 1.9, y + r * 1.4, cx, y);
+      g.closePath(); g.fill(); g.stroke();
+    }
+    g.beginPath(); g.arc(cx, y, r * 0.52, 0, 7); g.fill(); g.stroke();
+  }},
+  wand: { draw(P){
+    const { g, cx, top, hh, w, ink, t } = P;
+    g.save();
+    g.translate(cx + w * 0.54, top + hh * 0.62);
+    g.rotate(-0.30 + Math.sin(t * 4) * 0.10);
+    g.lineCap = "round"; g.lineWidth = 4.5; g.strokeStyle = "#8A6A40";
+    g.beginPath(); g.moveTo(0, hh * 0.24); g.lineTo(0, -hh * 0.30); g.stroke();
+    star(g, 0, -hh * 0.40, w * 0.19, w * 0.085, 5);
+    g.fillStyle = "#FFE06B"; g.fill();
+    g.lineWidth = 2.5; g.lineJoin = "round"; g.strokeStyle = ink; g.stroke();
+    g.restore();
+  }},
+};
+
+// f = { line, stage }。cx＝中心、baseY＝足もと、h＝基準の高さ
+function drawCreature(g, f, cx, baseY, h, opt = {}){
+  const im = opt.im || IMG.s1;
+  const t  = opt.t != null ? opt.t : game.time;
+  const sx = opt.sx != null ? opt.sx : 1, sy = opt.sy != null ? opt.sy : 1;
+  const H0 = h * SIZE_UP[f.stage - 1];
+  const w0 = ready(im) ? im.naturalWidth / im.naturalHeight * H0 : H0;
+  const w  = w0 * sx, hh = H0 * sy, top = baseY - hh;
+  const P = { g, cx, top, w, hh, baseY, t, ink: COL.line, acc: LINE_INFO[f.line].acc, col: bodyCol(f) };
+  const parts = LINE_PARTS[f.line][f.stage - 1];
+  for(const k of parts) if(PART[k].back) PART[k].draw(P);
+  const src = f.stage === 1 ? im : (tinted(im, bodyCol(f)) || im);
+  if(ready(im)) g.drawImage(src, cx - w / 2, top, w, hh);
+  else { g.fillStyle = bodyCol(f); g.beginPath(); g.ellipse(cx, baseY - hh / 2, w / 2, hh / 2, 0, 0, 7); g.fill(); }
+  for(const k of parts) if(!PART[k].back) PART[k].draw(P);
+}
+
+// そだてる画面に出す小さい姿
+function formThumb(line, stage, size){
+  const c = document.createElement("canvas");
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  c.width = size * d; c.height = size * d;
+  c.style.width = size + "px"; c.style.height = size + "px";
+  const g = c.getContext("2d"); g.scale(d, d);
+  const paint = () => {
+    g.clearRect(0, 0, size, size);
+    g.fillStyle = "#F3ECFF"; g.beginPath(); g.arc(size / 2, size / 2, size / 2 - 1, 0, 7); g.fill();
+    g.save(); g.beginPath(); g.arc(size / 2, size / 2, size / 2 - 1, 0, 7); g.clip();
+    drawCreature(g, { line, stage }, size / 2, size * 0.90, size * 0.44, { im: IMG.s1, t: 1.1 });
+    g.restore();
+  };
+  paint();
+  if(!ready(IMG.s1)) IMG.s1.addEventListener("load", paint, { once: true });
+  return c;
+}
+
 // 動きに合わせて絵を選ぶ（伸び・まん丸・落下・つぶれ）
 function slimePose(P){
   if(game.mode === "dead") return IMG.s9;
@@ -912,15 +1996,60 @@ function drawSlime(run){
     ctx.beginPath(); ctx.ellipse(x, GY + 3, R * (1 - Math.min(0.5, hgt / 240)), 3.5, 0, 0, Math.PI * 2); ctx.fill();
   }
 
+  if(run.inv > 0 && Math.floor(game.time * 12) % 2 === 0) return;   // 無敵の間は点滅
   const im = slimePose(P);
   const key = Object.keys(IMG).find(k => IMG[k] === im);
-  const h = (POSE_H[key] || 40);
-  if(ready(im)){
-    const w = im.naturalWidth / im.naturalHeight * h;
-    ctx.drawImage(im, x - w * sx / 2, baseY + 3 + hop - h * sy, w * sx, h * sy);
-  }else{
-    ctx.fillStyle = COL.mint;
-    ctx.beginPath(); ctx.ellipse(x, baseY - R + hop, R, R, 0, 0, Math.PI * 2); ctx.fill();
+  drawCreature(ctx, pet, x, baseY + 3 + hop, POSE_H[key] || 40, { im, sx, sy });
+}
+
+/* ---- 落ちているクリスタル ---- */
+function drawGems(run){
+  for(const q of run.gems){
+    if(q.got) continue;
+    const x = q.x - run.cam;
+    if(x < -30 || x > W + 30) continue;
+    const bob = Math.sin(game.time * 3 + q.x * 0.03) * 3;
+    const y = GY + q.y + bob;
+    // 光の輪。障害物と見まちがえないよう、拾えるものはふわっと光らせる
+    const gr = ctx.createRadialGradient(x, y, 2, x, y, 17);
+    gr.addColorStop(0, "rgba(180,245,255,.75)"); gr.addColorStop(1, "rgba(180,245,255,0)");
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 17, 0, 7); ctx.fill();
+    if(ready(IMG.crystal)){
+      const h = 24, w = IMG.crystal.naturalWidth / IMG.crystal.naturalHeight * h;
+      ctx.drawImage(IMG.crystal, x - w / 2, y - h / 2, w, h);
+    }else{
+      ctx.fillStyle = "#7FE6FF";
+      ctx.beginPath(); ctx.moveTo(x, y - 11); ctx.lineTo(x + 8, y); ctx.lineTo(x, y + 11); ctx.lineTo(x - 8, y); ctx.closePath();
+      ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = COL.line; ctx.stroke();
+    }
+  }
+}
+
+/* ---- おうち（タイトル画面）---- */
+function drawHome(){
+  const cx = W / 2, baseY = GY + 2;
+  // すわり心地のよさそうな座ぶとん
+  ctx.fillStyle = "rgba(89,66,54,.2)";
+  ctx.beginPath(); ctx.ellipse(cx, baseY + 4, 56, 8, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#F6C8E2";
+  ctx.beginPath(); ctx.ellipse(cx, baseY - 4, 52, 15, 0, 0, 7); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = COL.line; ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,.55)";
+  ctx.beginPath(); ctx.ellipse(cx - 12, baseY - 9, 20, 5, 0, 0, 7); ctx.fill();
+  put(IMG.mushroom, cx - 118, GY + 2, 30);
+  put(IMG.crystal,  cx + 122, GY + 2, 26);
+
+  // ふだんはのんびり跳ねている。なでると大きくはずむ
+  const happy = Math.max(0, game.petHappy);
+  const sp = happy > 0 ? 0.20 : 0.42;
+  const k = Math.abs(Math.sin(game.time / sp * Math.PI));
+  const hop = -k * (happy > 0 ? 26 : 10);
+  const sx = 1 + (1 - k) * 0.15, sy = 1 - (1 - k) * 0.15;
+  drawCreature(ctx, pet, cx, baseY - 6 + hop, 62, { im: IMG.s1, sx, sy });
+
+  if(game.evoT > 0){
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(0.85, game.evoT * 0.8)})`;
+    ctx.fillRect(0, 0, W, H);
   }
 }
 
@@ -958,6 +2087,9 @@ function label(text, x, y, size, col){
 
 function drawHUD(run){
   if(game.mode === "title" || game.mode === "dead") return;
+  // 拾ったクリスタル
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  label(`💎 ${game.runGems}`, 12, 12, 17, "#2E7C9E");
   const m = run.cam / PX_PER_M;
   const roomy = bandTop > 110;
   const y = roomy ? bandTop - 96 : 12;
@@ -1003,7 +2135,7 @@ function frame(now){
           const j = judgeBeat();
           if(j === "PERFECT"){
             game.combo++; game.bestCombo = Math.max(game.bestCombo, game.combo);
-            game.bonus += 2 + Math.min(8, Math.floor(game.combo / 5));
+            game.bonus += Math.round((2 + Math.min(8, Math.floor(game.combo / 5))) * perk("rhythm"));
             game.pops.push({ text: game.combo >= 2 ? `PERFECT ${game.combo}` : "PERFECT", col: "#FFB300", t: 0 });
             at(1320, actx.currentTime, .12, "square", .09, { echo: true });
             burst(PX, GY + run.P.y, 10, "#FFD13B", 170);
@@ -1015,18 +2147,22 @@ function frame(now){
           }
         }
         else if(e === "land"){ SFX.land(); game.squashT = 0.12; burst(PX, GY, 5, "rgba(255,255,255,.8)", 70); }
+        else if(e === "gem"){
+          game.runGems++; SFX.gem();
+          burst(PX, GY + run.P.y, 8, "#9EEFFF", 160, 40);
+        }
       }
       run.ev.length = 0;
       if(run.P.dead){ die(); break; }
     }
     const f = floorOf(run.cam / PX_PER_M);
     if(f > game.lastFloor){ game.lastFloor = f; game.floorFlash = 1.2; SFX.floor(); }
-  }else if(game.mode === "title"){
-    run.cam += 90 * dt;
   }else{
     acc = 0;
   }
   if(game.floorFlash > 0) game.floorFlash -= dt;
+  if(game.petHappy > 0) game.petHappy -= dt;
+  if(game.evoT > 0) game.evoT -= dt * 1.6;
   if(game.squashT > 0) game.squashT -= dt;
   if(game.shake > 0) game.shake = Math.max(0, game.shake - dt * 40);
 
@@ -1041,7 +2177,8 @@ function frame(now){
   drawGround(run);
   drawSigns(run);
   drawObstacles(run);
-  drawSlime(run);
+  drawGems(run);
+  if(game.mode === "title") drawHome(); else drawSlime(run);
   drawParticles(dt);
   drawPops(dt);
   // 左右のふちを暗く
