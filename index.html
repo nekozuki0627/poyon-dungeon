@@ -81,6 +81,13 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
   padding:1px 7px;font-size:11px;border:2px solid #594236;
 }
 
+/* ---- 起動したときのタイトル ---- */
+#startView{justify-content:center;gap:14px;background:linear-gradient(180deg,rgba(40,28,60,.25),rgba(40,28,60,.55))}
+#startView .logo{font-size:clamp(44px,13vw,70px)}
+#startView .btn{pointer-events:auto;min-width:220px}
+#startView .card{pointer-events:auto}
+.start-note{font-size:12px;color:#fff;font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.5);margin-top:4px}
+
 /* ---- そだてる画面 ---- */
 #evoView .card{pointer-events:auto;max-height:86vh;overflow:auto}
 .evo-now{margin:4px 0 2px;font-size:15px;font-weight:900;color:#594236}
@@ -278,7 +285,28 @@ body.cinema #adbar, body.cinema #mute{display:none}
 <body>
 <canvas id="cv"></canvas>
 
-<div class="overlay" id="titleView">
+<div class="overlay" id="startView">
+  <div class="logo">ぽよん<br>ダンジョン<small>POYON DUNGEON</small></div>
+  <div style="height:18px"></div>
+  <button class="btn go" id="stContinue">▶　つづきから</button>
+  <button class="btn sub" id="stNew">さいしょから</button>
+  <div class="start-note" id="stNote"></div>
+</div>
+
+<div class="overlay hide" id="restartView">
+  <div class="card" style="text-align:center;pointer-events:auto">
+    <div class="r-label">さいしょから</div>
+    <div class="st-lock" style="margin-top:10px;color:#594236">
+      いまの子との思い出、小屋の家族、クリスタル、記録が消えて、<br>
+      雨の日に新しい子を拾うところから始まります。<br>
+      <span style="font-size:11px;color:#8A79B5">（救いの章を買ったぶんは、そのまま残ります）</span>
+    </div>
+    <button class="btn sub" id="rsOk" style="margin-top:14px;background:linear-gradient(180deg,#FFD0D0,#F29A9A)">消して、育てなおす</button>
+    <button class="btn sub" id="rsBack" style="margin-top:8px">やめる</button>
+  </div>
+</div>
+
+<div class="overlay hide" id="titleView">
   <div class="home-top">
     <div class="logo">ぽよん<br>ダンジョン<small>POYON DUNGEON</small></div>
     <div class="best-line hide" id="titleBest"></div>
@@ -1707,6 +1735,38 @@ tapBtn("rHome", () => {
 
 /* はじめて開いたとき。名前をつけて、第1章を読んでから おうちに立つ。
    （いきなり「もぐる」だと第1章を読む機会がないため） */
+/* ---- 起動したときのタイトル ---- */
+function openStart(){
+  game.ui = "start";
+  const has = store.get("poyon_intro_done", false);
+  $("titleView").classList.add("hide");
+  $("stContinue").classList.toggle("hide", !has);
+  $("stNew").textContent = has ? "さいしょから（育てなおす）" : "▶　はじめる";
+  $("stNew").className = has ? "btn sub" : "btn go";
+  $("stNote").textContent = has ? `${pet.name}（${formName(pet)}）が 待っている` : "";
+  $("startView").classList.remove("hide");
+}
+function leaveStart(){
+  game.ui = null;
+  $("startView").classList.add("hide");
+  $("titleView").classList.remove("hide");
+  refreshHome();
+}
+// 育てなおす：課金で買った救いの章と、音の設定だけ残して、ほかは消す
+function restartAll(){
+  for(const k of ["poyon_pet_name", "poyon_pet_line", "poyon_pet_stage", "poyon_gems", "poyon_total",
+                  "poyon_family", "poyon_story", "poyon_best_m", "poyon_bestdist_m", "poyon_lastdeath_m", "poyon_intro_done"]){
+    try{ localStorage.removeItem(k); }catch(e){}
+  }
+  pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
+  pet.line = "slime"; pet.stage = 1; pet.gems = 0; pet.total = 0;
+  family.length = 0;
+  story.slime = 1; story.beast = 1; story.human = 1;
+  game.best = 0; game.bestDist = 0; game.lastDeath = 0; game.lastRun = null;
+  savePet(); saveStory();
+  $("titleBest").classList.add("hide");
+}
+
 let introMode = false;
 function askIntroName(){
   introMode = true; game.ui = "name";
@@ -1720,6 +1780,18 @@ function maybeIntro(){
   if(store.get("poyon_intro_done", false)) return;
   askIntroName();
 }
+tapBtn("stContinue", leaveStart);
+tapBtn("stNew", () => {
+  if(!store.get("poyon_intro_done", false)){ leaveStart(); askIntroName(); return; }
+  $("restartView").classList.remove("hide"); game.ui = "restart";
+});
+tapBtn("rsBack", () => { $("restartView").classList.add("hide"); game.ui = "start"; });
+tapBtn("rsOk", () => {
+  $("restartView").classList.add("hide");
+  restartAll();
+  leaveStart();
+  askIntroName();
+});
 $("nameInput").addEventListener("keydown", e => { if(e.key === "Enter") $("nameOk").click(); });
 
 $("mute").addEventListener("pointerdown", e => {
@@ -2506,7 +2578,8 @@ function drawHome(){
     // 人に近い姿は、潰れずに ぴょこっと跳ねる
     drawCreature(ctx, pet, cx, baseY - 2 + hop * 0.7, 62, { sx: 1, sy: 1 + Math.sin(game.time * 2.2) * 0.01, cap: 3.2 });
   }else{
-    drawCreature(ctx, pet, cx, baseY - 6 + hop, 62, { im: IMG.s1, sx, sy, cap: 3.2 });
+    // 絵の姿は余白があるぶん浮いて見えるので、少し沈める
+    drawCreature(ctx, pet, cx, baseY + (pet.stage >= 2 ? 3 : -6) + hop, 62, { im: IMG.s1, sx, sy, cap: 3.2 });
   }
 
   if(game.evoT > 0){
@@ -2665,7 +2738,7 @@ function frame(now){
 }
 
 showTitle();
-maybeIntro();
+openStart();
 requestAnimationFrame(frame);
 </script>
 </body>
