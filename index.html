@@ -96,6 +96,23 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
 .ec-desc{font-size:10px;color:#7A68A8;font-weight:700;line-height:1.35;min-height:4.1em}
 .ec-cost{margin-top:2px;font-size:12px;font-weight:900;color:#3E8FB8}
 .stars{letter-spacing:2px;font-size:11px;color:#EFAE2B}
+/* 進化のチャート */
+.chart{display:flex;align-items:flex-start;justify-content:center;gap:1px;margin:12px 0 2px}
+.step{flex:1 1 0;min-width:0;text-align:center;opacity:.5}
+.step.on{opacity:1}
+.step canvas{display:block;margin:0 auto}
+.st-nm{font-size:9px;font-weight:900;color:#8A79B5;line-height:1.3;margin-top:3px}
+.step.now .st-nm{color:#C98016}
+.step.now canvas{border-radius:50%;box-shadow:0 0 0 3px #EFAE2B}
+.pickone{
+  display:flex;align-items:center;gap:12px;text-align:left;margin:12px 0 4px;
+  border:3px solid #594236;border-radius:16px;padding:10px 12px;background:#FFFBF2;
+  box-shadow:0 5px 0 rgba(89,66,54,.2);
+}
+.pickone .po-t{font-size:15px;font-weight:900;color:#594236;line-height:1.3}
+.pickone .po-d{font-size:11px;font-weight:700;color:#7A68A8;line-height:1.4;margin-top:3px}
+.ecard.sel{background:linear-gradient(180deg,#FFF6D8,#FFE09A);border-color:#C98016}
+.warn{font-size:11px;font-weight:900;color:#C95A5A;line-height:1.6;margin-top:4px}
 /* ---- おはなし（映画の見せ方）----
    遊ぶところはポップなまま、読むところだけ落ち着いた作りにする。
    明朝・レターボックス・字幕・章タイトルのカット。 */
@@ -294,7 +311,9 @@ body.cinema #adbar, body.cinema #mute{display:none}
     <div class="r-label">そだてる</div>
     <div class="evo-now"><span id="evoName"></span><span id="evoTitle"></span></div>
     <div class="gemline">💎 <b id="evoGems">0</b></div>
+    <div class="chart hide" id="evoChart"></div>
     <div class="cards" id="evoCards"></div>
+    <div id="evoPickBox"></div>
     <div class="r-gap" id="evoNote"></div>
     <button class="btn sub" id="evoBack" style="margin-top:12px">もどる</button>
   </div>
@@ -1134,38 +1153,94 @@ function revive(){
 }
 
 /* ---- そだてる ---- */
+let evoPick = null;
 function openEvo(){
-  game.ui = "evo";
+  game.ui = "evo"; evoPick = null;
   $("resultView").classList.add("hide");
   $("evoName").textContent = pet.name;
   $("evoTitle").textContent = `／ ${formName(pet)}（第${pet.stage}段階）`;
   $("evoGems").textContent = pet.gems;
-  const box = $("evoCards"); box.innerHTML = "";
-  if(pet.stage >= 5){
-    $("evoNote").textContent = "これ以上は進化できない。もう立派なものだ。";
-  }else{
-    const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost;
-    $("evoNote").textContent = ok ? "どの姿になるかは、きみが決めていい" : `あと 💎${cost - pet.gems} で進化できる`;
+  $("evoView").classList.remove("hide");
+  renderEvo();
+}
+
+function renderEvo(){
+  const box = $("evoCards"), chart = $("evoChart"), pick = $("evoPickBox");
+  box.innerHTML = ""; chart.innerHTML = ""; pick.innerHTML = "";
+  $("evoGems").textContent = pet.gems;
+
+  if(pet.stage === 1){
+    // はじめの一回だけ、どの道に進むかを選ぶ
+    chart.classList.add("hide");
+    const cost = EVO_COST[2], ok = pet.gems >= cost;
     for(const line of LINES){
       const info = LINE_INFO[line];
       const el = document.createElement("button");
-      el.className = "ecard" + (ok ? "" : " off");
-      el.appendChild(formThumb(line, next, 82));
+      el.className = "ecard" + (ok ? "" : " off") + (evoPick === line ? " sel" : "");
+      el.appendChild(formThumb(line, 2, 82));
       el.insertAdjacentHTML("beforeend",
         `<div class="ec-line">${info.label}</div>
-         <div class="ec-name">${info.names[next - 1]}</div>
+         <div class="ec-name">${info.names[1]}</div>
          <div class="ec-desc">${info.desc}</div>
          <div class="ec-cost">💎 ${cost}</div>`);
-      el.addEventListener("pointerdown", ev => { ev.stopPropagation(); ev.preventDefault(); doEvolve(line); });
+      if(ok) el.addEventListener("pointerdown", ev => {
+        ev.stopPropagation(); ev.preventDefault();
+        evoPick = line; renderEvo();
+      });
       box.appendChild(el);
     }
+    if(!ok){
+      $("evoNote").textContent = `あと 💎${cost - pet.gems} で進化できる`;
+    }else if(!evoPick){
+      $("evoNote").innerHTML = `どの道にすすむか、ここで決める<div class="warn">えらんだら、もう別の道には行けない</div>`;
+    }else{
+      $("evoNote").innerHTML = `<div class="warn">「${LINE_INFO[evoPick].label}」の道でいい？　あとから変えられない</div>`;
+      const b = document.createElement("button");
+      b.className = "btn sub ready"; b.style.marginTop = "6px";
+      b.textContent = `この道にすすむ（💎${cost}）`;
+      b.addEventListener("pointerdown", ev => { ev.stopPropagation(); ev.preventDefault(); doEvolve(evoPick); });
+      pick.appendChild(b);
+    }
+    return;
   }
-  $("evoView").classList.remove("hide");
+
+  // 二回目からは、選んだ道の先しかない
+  chart.classList.remove("hide");
+  const info = LINE_INFO[pet.line];
+  for(let n = 1; n <= 5; n++){
+    const seen = n <= pet.stage + 1;                 // 次の姿までは見せる
+    const el = document.createElement("div");
+    el.className = "step" + (n <= pet.stage ? " on" : "") + (n === pet.stage ? " now" : "");
+    el.appendChild(formThumb(pet.line, n, 54, !seen));
+    el.insertAdjacentHTML("beforeend", `<div class="st-nm">${seen ? info.names[n - 1] : "？？？"}</div>`);
+    chart.appendChild(el);
+  }
+  if(pet.stage >= 5){
+    $("evoNote").textContent = "この道の、いちばん先まで来た。";
+    return;
+  }
+  const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost;
+  $("evoNote").textContent = ok ? `${info.label}の道の、つぎの姿` : `あと 💎${cost - pet.gems} で進化できる`;
+  const card = document.createElement("div");
+  card.className = "pickone";
+  card.appendChild(formThumb(pet.line, next, 64));
+  card.insertAdjacentHTML("beforeend",
+    `<div><div class="po-t">${info.names[next - 1]}</div>
+     <div class="po-d">${info.desc}</div>
+     <div class="ec-cost" style="text-align:left">💎 ${cost}</div></div>`);
+  pick.appendChild(card);
+  const b = document.createElement("button");
+  b.className = "btn sub" + (ok ? " ready" : "");
+  b.textContent = ok ? "進化する" : `💎 が たりない`;
+  if(ok) b.addEventListener("pointerdown", ev => { ev.stopPropagation(); ev.preventDefault(); doEvolve(pet.line); });
+  else b.disabled = true;
+  pick.appendChild(b);
 }
 function closeEvo(){ game.ui = null; $("evoView").classList.add("hide"); }
 
 function doEvolve(line){
   if(pet.stage >= 5) return;
+  if(pet.stage > 1 && line !== pet.line) return;   // いちど選んだ道からは外れない
   const next = pet.stage + 1, cost = EVO_COST[next];
   if(pet.gems < cost) return;
   pet.gems -= cost; pet.line = line; pet.stage = next; savePet();
@@ -2035,7 +2110,7 @@ function drawCreature(g, f, cx, baseY, h, opt = {}){
 }
 
 // そだてる画面に出す小さい姿
-function formThumb(line, stage, size){
+function formThumb(line, stage, size, dark){
   const c = document.createElement("canvas");
   const d = Math.min(2, window.devicePixelRatio || 1);
   c.width = size * d; c.height = size * d;
@@ -2045,6 +2120,7 @@ function formThumb(line, stage, size){
     g.clearRect(0, 0, size, size);
     g.fillStyle = "#F3ECFF"; g.beginPath(); g.arc(size / 2, size / 2, size / 2 - 1, 0, 7); g.fill();
     g.save(); g.beginPath(); g.arc(size / 2, size / 2, size / 2 - 1, 0, 7); g.clip();
+    if(dark){ g.filter = "brightness(0)"; g.globalAlpha = 0.28; }   // まだ見ぬ姿は影で
     drawCreature(g, { line, stage }, size / 2, size * 0.90, size * 0.44, { im: IMG.s1, t: 1.1 });
     g.restore();
   };
@@ -2116,26 +2192,121 @@ function drawGems(run){
   }
 }
 
+/* ---- おうちの小屋 ----
+   待つあいだの場所。洞窟ではなく、この子と暮らしている小屋の中。
+   左に地下へ下りる入口（ここから もぐる）、右に窓と棚、真ん中に寝床。 */
+function drawHut(){
+  const fy = GY;
+  // 壁（木の板）
+  const g = ctx.createLinearGradient(0, 0, 0, fy);
+  g.addColorStop(0, "#F1D3AE"); g.addColorStop(1, "#D2A176");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, fy);
+  ctx.strokeStyle = "rgba(138,95,60,.22)"; ctx.lineWidth = 2;
+  for(let y = 16; y < fy; y += 27){ ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(W, y + .5); ctx.stroke(); }
+  // 柱
+  ctx.fillStyle = "#BE8A5E";
+  for(const x of [6, W - 24]){ ctx.fillRect(x, 0, 18, fy); ctx.strokeStyle = "rgba(89,66,54,.4)"; ctx.lineWidth = 2.5; ctx.strokeRect(x + 1, -2, 16, fy + 2); }
+  // 床
+  ctx.fillStyle = "#A8784F"; ctx.fillRect(0, fy, W, H - fy);
+  ctx.fillStyle = "#C08D62"; ctx.fillRect(0, fy, W, 12);
+  ctx.fillStyle = "rgba(89,66,54,.35)";
+  for(let x = 0; x < W; x += 44) ctx.fillRect(x, fy + 12, 2, H - fy);
+  // 幅木
+  ctx.fillStyle = "#8A5F3C"; ctx.fillRect(0, fy - 9, W, 9);
+  ctx.fillStyle = "rgba(89,66,54,.45)"; ctx.fillRect(0, fy - 11, W, 2);
+
+  // 地下へ下りる入口
+  const ax = 32, aw = 76, ay = fy - 112;
+  ctx.fillStyle = "#7A5435";
+  roundRect(ax - 7, ay - 8, aw + 14, fy - ay + 8, 12); ctx.fill();
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
+  const og = ctx.createLinearGradient(0, ay, 0, fy);
+  og.addColorStop(0, "#241B3E"); og.addColorStop(1, "#4E3E7C");
+  ctx.fillStyle = og;
+  ctx.beginPath();
+  ctx.moveTo(ax, fy); ctx.lineTo(ax, ay + 26);
+  ctx.quadraticCurveTo(ax + aw / 2, ay - 14, ax + aw, ay + 26);
+  ctx.lineTo(ax + aw, fy); ctx.closePath(); ctx.fill();
+  // 下りていく段。ここが地下への入口だと分かるように、はっきり描く
+  for(let i = 0; i < 4; i++){
+    const w2 = aw - 10 - i * 11, x2 = ax + 5 + i * 5.5, y2 = fy - 13 - i * 16;
+    ctx.fillStyle = `rgba(214,200,255,${.34 - i * .06})`; ctx.fillRect(x2, y2, w2, 6);
+    ctx.fillStyle = `rgba(20,14,36,${.5 - i * .08})`;     ctx.fillRect(x2, y2 + 6, w2, 5);
+  }
+  for(let i = 0; i < 3; i++){                        // 奥のきらめき
+    const t = (game.time * 0.5 + i * 0.37) % 1;
+    ctx.globalAlpha = 0.5 * Math.sin(t * Math.PI);
+    ctx.fillStyle = "#BFA8FF";
+    ctx.beginPath(); ctx.arc(ax + 18 + hash(i * 5.1) * (aw - 36), fy - 20 - t * 60, 2, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 窓（外は洞窟の夜）
+  const wx0 = W - 122, wy0 = fy - 168, ww = 84, wh = 64;
+  const sg = ctx.createLinearGradient(0, wy0, 0, wy0 + wh);
+  sg.addColorStop(0, "#463672"); sg.addColorStop(1, "#7C63B8");
+  ctx.fillStyle = sg; ctx.fillRect(wx0, wy0, ww, wh);
+  for(let i = 0; i < 5; i++){
+    ctx.globalAlpha = 0.4 + 0.4 * Math.sin(game.time * 1.6 + i);
+    ctx.fillStyle = "#EADFFF";
+    ctx.beginPath(); ctx.arc(wx0 + 10 + hash(i * 2.2) * (ww - 20), wy0 + 8 + hash(i * 7.7) * (wh - 20), 1.6, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 4; ctx.strokeRect(wx0, wy0, ww, wh);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(wx0 + ww / 2, wy0); ctx.lineTo(wx0 + ww / 2, wy0 + wh);
+  ctx.moveTo(wx0, wy0 + wh / 2); ctx.lineTo(wx0 + ww, wy0 + wh / 2); ctx.stroke();
+  ctx.fillStyle = "#8A5F3C";                          // 窓台
+  roundRect(wx0 - 8, wy0 + wh, ww + 16, 9, 3); ctx.fill();
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5; ctx.stroke();
+
+  // 棚とびん
+  const sx0 = W - 128, sy0 = fy - 74;
+  ctx.fillStyle = "#9C6C44"; roundRect(sx0, sy0, 98, 8, 3); ctx.fill();
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5; ctx.stroke();
+  for(let i = 0; i < 3; i++){
+    const jx = sx0 + 16 + i * 30, jh = 18 + hash(i * 3.3) * 8;
+    ctx.fillStyle = ["#9FE3DC", "#F2B7CF", "#F7DE9B"][i];
+    roundRect(jx - 9, sy0 - jh, 18, jh, 4); ctx.fill();
+    ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = "#8A5F3C"; ctx.fillRect(jx - 7, sy0 - jh - 4, 14, 5);
+  }
+
+  // つるしたランタン（この子を照らす）
+  const lx = W / 2 + 4, ly = Math.max(24, fy - 210);
+  ctx.strokeStyle = "#6E5038"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, ly); ctx.stroke();
+  const lg = ctx.createRadialGradient(lx, ly + 16, 6, lx, ly + 16, 150);
+  lg.addColorStop(0, "rgba(255,226,150,.45)"); lg.addColorStop(1, "rgba(255,226,150,0)");
+  ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(lx, ly + 16, 150, 0, 7); ctx.fill();
+  ctx.fillStyle = "#F7DE9B"; roundRect(lx - 11, ly + 4, 22, 24, 5); ctx.fill();
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = "#FFF6D0";
+  ctx.beginPath(); ctx.ellipse(lx, ly + 16, 5, 7 + Math.sin(game.time * 4) * 1, 0, 0, 7); ctx.fill();
+}
+
 /* ---- おうち（タイトル画面）---- */
 function drawHome(){
   const cx = W / 2, baseY = GY + 2;
-  // すわり心地のよさそうな座ぶとん
-  ctx.fillStyle = "rgba(89,66,54,.2)";
-  ctx.beginPath(); ctx.ellipse(cx, baseY + 4, 56, 8, 0, 0, 7); ctx.fill();
+  // この子の寝床。木わくにクッションを敷いてある
+  ctx.fillStyle = "rgba(89,66,54,.22)";
+  ctx.beginPath(); ctx.ellipse(cx, baseY + 3, 58, 8, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#A8724A"; roundRect(cx - 58, baseY - 20, 116, 24, 8); ctx.fill();
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
   ctx.fillStyle = "#F6C8E2";
-  ctx.beginPath(); ctx.ellipse(cx, baseY - 4, 52, 15, 0, 0, 7); ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = COL.line; ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,.55)";
-  ctx.beginPath(); ctx.ellipse(cx - 12, baseY - 9, 20, 5, 0, 0, 7); ctx.fill();
-  put(IMG.mushroom, cx - 118, GY + 2, 30);
-  put(IMG.crystal,  cx + 122, GY + 2, 26);
-  // この子がこれまでに運んできたぶんが、おうちに積もっていく
-  const pile = Math.min(18, Math.floor(pet.total / 18));
+  ctx.beginPath(); ctx.ellipse(cx, baseY - 14, 48, 12, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,.5)";
+  ctx.beginPath(); ctx.ellipse(cx - 13, baseY - 18, 17, 4, 0, 0, 7); ctx.fill();
+
+  // この子がこれまでに運んできたぶんが、小屋にたまっていく
+  const pile = Math.min(16, Math.floor(pet.total / 18));
   for(let i = 0; i < pile; i++){
     const sd = i % 2 ? 1 : -1, a = hash(i * 3.7 + 1), b = hash(i * 9.1 + 2);
-    put(IMG.crystal, cx + sd * (58 + a * 104), GY + 5 + b * 28, 13 + b * 8);
+    put(IMG.crystal, cx + sd * (72 + a * 84), GY + 1 + b * 7, 14 + b * 8);
   }
-  if(pile >= 18) put(IMG.chest, cx - 150, GY + 26, 30);
+  if(pile >= 16) put(IMG.chest, cx + 132, GY + 4, 32);
 
   // ふだんはのんびり跳ねている。なでると大きくはずむ
   const happy = Math.max(0, game.petHappy);
@@ -2277,12 +2448,17 @@ function frame(now){
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * (offX + sx * scale), dpr * sy * scale);
   ctx.save();
   ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
-  drawBackground(run.cam);
-  drawGround(run);
-  drawSigns(run);
-  drawObstacles(run);
-  drawGems(run);
-  if(game.mode === "title") drawHome(); else drawSlime(run);
+  if(game.mode === "title"){
+    drawHut();
+    drawHome();
+  }else{
+    drawBackground(run.cam);
+    drawGround(run);
+    drawSigns(run);
+    drawObstacles(run);
+    drawGems(run);
+    drawSlime(run);
+  }
   drawParticles(dt);
   drawPops(dt);
   // 左右のふちを暗く
