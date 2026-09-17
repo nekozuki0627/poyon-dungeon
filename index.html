@@ -1563,7 +1563,7 @@ function die(){
   setTimeout(() => {
     if(game.mode !== "dead") return;
     $("rLabel").textContent = "ここで ちからつきた";
-    $("rFloor").textContent = `地下 ${floorOf(m)} 階`;
+    $("rFloor").textContent = floorText(floorOf(m), true);
     $("rDist").innerHTML = `${Math.floor(m)} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
       <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
     $("rNew").innerHTML = isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "";
@@ -1610,7 +1610,7 @@ function clearRun(){
   setTimeout(() => {
     if(game.mode !== "clear") return;
     $("rLabel").textContent = "ゴール！　クリア";
-    $("rFloor").textContent = `地下 ${GOAL_FLOOR} 階`;
+    $("rFloor").textContent = floorText(GOAL_FLOOR, true);
     $("rDist").innerHTML = `${m} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
       <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
     $("rNew").innerHTML = perfect ? `<span class="newrec">ノーミス ＆ クリスタル ぜんぶ！</span>`
@@ -2641,6 +2641,11 @@ function curObj(){
   }
   return stageObj[k];
 }
+// 洞窟では「地下◯階」。外や家の中のステージで「地下」はおかしいので「◯ / 25」にする（ゆま 9/17）
+function floorText(n, spaced){
+  if(stageKey()) return `${n} / ${GOAL_FLOOR}`;
+  return spaced ? `地下 ${n} 階` : `地下${n}階`;
+}
 function curStage(){
   const k = game.mode === "title" ? null : stageKey();
   if(!k) return null;
@@ -2818,8 +2823,9 @@ function drawSigns(run){
       const sy = bandTop + 10, bw = 76, bh = 30;
       ctx.strokeStyle = "#8A6A40"; ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(gx - bw / 2 + 8, sy); ctx.lineTo(gx - bw / 2 + 11, sy + 12);
-      ctx.moveTo(gx + bw / 2 - 8, sy); ctx.lineTo(gx + bw / 2 - 11, sy + 12);
+      const rt = stageKey() ? -4 : sy;
+      ctx.moveTo(gx - bw / 2 + 10, rt); ctx.lineTo(gx - bw / 2 + 11, sy + 12);
+      ctx.moveTo(gx + bw / 2 - 10, rt); ctx.lineTo(gx + bw / 2 - 11, sy + 12);
       ctx.stroke();
       ctx.fillStyle = "#FFE9A8"; roundRect(gx - bw / 2, sy + 12, bw, bh, 8); ctx.fill();
       ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
@@ -2835,13 +2841,14 @@ function drawSigns(run){
     const sy = bandTop + 10, bw = 62, bh = 26;
     ctx.strokeStyle = "#8A6A40"; ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(x - bw / 2 + 8, sy); ctx.lineTo(x - bw / 2 + 11, sy + 12);
-    ctx.moveTo(x + bw / 2 - 8, sy); ctx.lineTo(x + bw / 2 - 11, sy + 12);
+    const rt = stageKey() ? -4 : sy;   // ステージでは画面の上からひもを下ろす（浮いて見えないように）
+    ctx.moveTo(x - bw / 2 + 10, rt); ctx.lineTo(x - bw / 2 + 11, sy + 12);
+    ctx.moveTo(x + bw / 2 - 10, rt); ctx.lineTo(x + bw / 2 - 11, sy + 12);
     ctx.stroke();
     ctx.fillStyle = "#F1E8D4"; roundRect(x - bw / 2, sy + 12, bw, bh, 7); ctx.fill();
     ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
     ctx.fillStyle = COL.ink; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(`地下${f + 1}階`, x, sy + 12 + bh / 2 + 1);
+    ctx.fillText(floorText(f + 1), x, sy + 12 + bh / 2 + 1);
   }
   // 前に力つきた場所。目印があると「今日はここを越える」になる
   if(game.lastDeath > 3 && game.mode !== "title" && Math.abs(game.lastDeath - game.bestDist) > 1){
@@ -2896,7 +2903,8 @@ function drawObstacles(run){
       // 天井から2本のひもで吊るす
       ctx.strokeStyle = COL.line; ctx.lineWidth = 3;
       ctx.beginPath();
-      if(top + 4 > bandTop - 20) for(const tx of (so.hang._ties || [.15, .85])){ ctx.moveTo(x - 5 + w * tx, bandTop - 20); ctx.lineTo(x - 5 + w * tx, top + 4); }
+      // 画面のいちばん上から吊るす（途中から始まると、空中に浮いて見える）
+      for(const tx of (so.hang._ties || [.15, .85])){ ctx.moveTo(x - 5 + w * tx, -4); ctx.lineTo(x - 5 + w * tx, top + 4); }
       ctx.stroke();
       ctx.drawImage(so.hang, x - 5, top, w, h);
       ctx.fillStyle = "rgba(89,66,54,.16)"; ctx.fillRect(x, GY - 4, o.w, 4);
@@ -3569,7 +3577,7 @@ function drawHUD(run){
   // 階層が上がった瞬間は、この表示自体を大きく金色にして知らせる
   // （別の場所に文字を出すと、HUDや遊ぶ帯と重なって読みにくくなる）
   const fl = Math.max(0, Math.min(1, game.floorFlash));
-  label(`地下 ${floorOf(m)} 階`, hx, y - fl * 4, (roomy ? 34 : 20) * (1 + 0.3 * fl), fl > 0.02 ? "#C98016" : "#5B4A86");
+  label(floorText(floorOf(m), true), hx, y - fl * 4, (roomy ? 34 : 20) * (1 + 0.3 * fl), fl > 0.02 ? "#C98016" : "#5B4A86");
   label(`${Math.floor(m)} m ／ ゴール ${GOAL_M} m`, hx, y + (roomy ? 42 : 24), roomy ? 18 : 12, "#7A68A8");
   if(game.bonus > 0){
     label(`リズム ＋${game.bonus}`, hx, y + (roomy ? 70 : 40), roomy ? 16 : 12, "#C98016");
