@@ -2531,6 +2531,22 @@ function loadStageBg(k){
   t.im.src = `assets/stage/${k}.jpg`;
   return t;
 }
+/* ステージごとの障害物（Gemini）。assets/stage_obj/{ステージ}_{spike1|spike3|hang|bat}.png
+   まだ無いステージは、いつもの三角コーン・岩・コウモリのまま */
+const STAGE_OBJ = ["human_2"];
+const stageObj = {};
+function curObj(){
+  const k = game.mode === "title" ? null : stageKey();
+  if(!k || STAGE_OBJ.indexOf(k) < 0) return null;
+  if(!stageObj[k]){
+    stageObj[k] = {};
+    for(const n of ["spike1", "spike3", "hang", "bat"]){
+      const im = new Image(); im.src = `assets/stage_obj/${k}_${n}.png`; stageObj[k][n] = im;
+    }
+    const fl = new Image(); fl.src = `assets/stage_obj/${k}_floor.jpg`; stageObj[k].floor = fl;
+  }
+  return stageObj[k];
+}
 function curStage(){
   const k = game.mode === "title" ? null : stageKey();
   if(!k) return null;
@@ -2652,12 +2668,27 @@ function drawGround(run){
     ctx.fillRect(x + 23, top + 29, 2, 11);
   }
 
+  // ステージの床の断面（Gemini）。左右反転を交互に並べて、つなぎ目を目立たせない
+  const so = curObj();
+  if(so && ready(so.floor)){
+    const fh = H - top + 2, fw = fh * so.floor.naturalWidth / so.floor.naturalHeight;
+    const fx0 = -(cam % (fw * 2)), fi0 = 0;
+    for(let i = fi0; fx0 + i * fw < W; i++){
+      const fx = fx0 + i * fw;
+      if(fx + fw < 0) continue;
+      if(i % 2){ ctx.save(); ctx.translate(fx + fw, top - 2); ctx.scale(-1, 1); ctx.drawImage(so.floor, 0, 0, fw, fh); ctx.restore(); }
+      else ctx.drawImage(so.floor, fx, top - 2, fw, fh);
+    }
+    ctx.fillStyle = COL.line; ctx.globalAlpha = .55; ctx.fillRect(0, top - 2, W, 3); ctx.globalAlpha = 1;
+  }
   // 穴（真っ黒にせず、紫のグラデにきらきらを浮かべる）
   for(const p of run.pits){
     const x0 = p.x0 - cam, x1 = p.x1 - cam;
     if(x1 < -10 || x0 > W + 10) continue;
     const g = ctx.createLinearGradient(0, top, 0, top + 120);
-    g.addColorStop(0, COL.pit); g.addColorStop(1, COL.pitDeep);
+    const sp = curStage();   // ステージでは、床の色を暗くした穴にする（紫の洞窟の穴のままだと浮く）
+    g.addColorStop(0, sp ? "rgba(40,26,20,.78)" : COL.pit); g.addColorStop(1, sp ? "rgba(20,12,10,.92)" : COL.pitDeep);
+    if(sp){ ctx.fillStyle = pal.groundDeep; ctx.fillRect(x0, top, x1 - x0, H - top); }
     ctx.fillStyle = g; ctx.fillRect(x0, top, x1 - x0, H - top);
     ctx.fillStyle = COL.line; ctx.globalAlpha = .5;
     ctx.fillRect(x0 - 2, top - 2, 3, 16); ctx.fillRect(x1 - 1, top - 2, 3, 16);
@@ -2753,6 +2784,35 @@ function drawObstacles(run){
   for(const o of run.obs){
     const x = o.x - cam;
     if(x < -140 || x > W + 60) continue;
+    const so = curObj();
+    if(o.k === "spike" && so && ready(so.spike1) && ready(so.spike3)){
+      // ステージの障害物。当たり判定の箱の上に、高さをそろえて置く（横ははみ出してもよい）
+      const im = o.w >= 45 ? so.spike3 : so.spike1;
+      const h = o.w >= 45 ? 30 : 27, w = h * im.naturalWidth / im.naturalHeight;
+      ctx.drawImage(im, x + o.w / 2 - w / 2, GY + 3 - h, w, h);
+      continue;
+    }
+    if(o.k === "ceil" && so && ready(so.hang)){
+      const bottom = GY + CEIL_BOTTOM;
+      const w = o.w + 10, h = Math.min(bottom - bandTop - 10, w * so.hang.naturalHeight / so.hang.naturalWidth);
+      const top = bottom - h;
+      // 天井から2本のひもで吊るす
+      ctx.strokeStyle = COL.line; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + w * .15 - 5, bandTop - 20); ctx.lineTo(x + w * .15 - 5, top + 6);
+      ctx.moveTo(x + w * .85 - 5, bandTop - 20); ctx.lineTo(x + w * .85 - 5, top + 6);
+      ctx.stroke();
+      ctx.drawImage(so.hang, x - 5, top, w, h);
+      ctx.fillStyle = "rgba(89,66,54,.16)"; ctx.fillRect(x, GY - 4, o.w, 4);
+      continue;
+    }
+    if(o.k === "bat" && so && ready(so.bat)){
+      const by = GY + o.y + Math.sin(o.x * 0.05) * 6;
+      const flap = 1 + Math.sin(game.time * 14 + o.x) * 0.08;
+      const h = 32, w = so.bat.naturalWidth / so.bat.naturalHeight * h;
+      ctx.drawImage(so.bat, x - w * flap / 2, by - h / 2, w * flap, h);
+      continue;
+    }
     if(o.k === "spike"){
       const three = o.w >= 45 && ready(IMG.spike3);
       if(three){
