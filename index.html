@@ -28,6 +28,9 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
 @media (max-aspect-ratio: 3/4){
   .overlay:not(#titleView){justify-content:flex-start;padding-top:max(9vh, calc(env(safe-area-inset-top) + 40px))}
   #titleView{padding-top:max(4vh, calc(env(safe-area-inset-top) + 16px))}
+  /* たて長のスマホ：ロゴは上、ボタンは下にまとめて、まん中の子を隠さない */
+  #startView.overlay{justify-content:space-between;padding-top:max(4vh, calc(env(safe-area-inset-top) + 16px))}
+  #startView .st-btns{display:flex;flex-direction:column;align-items:center;gap:12px}
 }
 .logo{
   font-size:clamp(34px,10vw,58px);font-weight:900;letter-spacing:.04em;line-height:1.05;
