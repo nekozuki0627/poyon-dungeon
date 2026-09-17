@@ -112,6 +112,19 @@ html.wide #titleView .btn.go{padding:12px 20px;font-size:clamp(17px,calc(var(--b
 html.wide .petname{max-width:100%}
 html.wide #titleView .pettitle{color:#594236;text-shadow:0 1px 0 rgba(255,255,255,.7)}
 
+/* ---- こんぷりーとBOOK ---- */
+.zk-rate{margin:6px 0 4px;font-size:13px;font-weight:900;color:#594236}
+.zk-rate b{font-size:22px;color:#C98016}
+.zk-bar{height:8px;border-radius:99px;background:#EDE4FF;border:2px solid #594236;overflow:hidden;margin:4px 0 10px}
+.zk-bar i{display:block;height:100%;background:linear-gradient(90deg,#8CF6F2,#3ED8D2)}
+.zk-sec{margin:12px 0 4px;font-size:13px;font-weight:900;color:#5B4A86;text-align:left}
+.zk-grid{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}
+.zk-cell{width:62px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.zk-cell div{font-size:9px;font-weight:900;color:#8A79B5;line-height:1.25;text-align:center}
+.zk-cell.got div{color:#594236}
+.zk-story{font-size:11px;font-weight:800;color:#8A79B5;text-align:left;margin-top:4px;line-height:1.6}
+.zk-story b{color:#594236}
+
 /* ---- そだてる画面 ---- */
 #evoView .card{pointer-events:auto;max-height:86vh;overflow:auto}
 .evo-now{margin:4px 0 2px;font-size:15px;font-weight:900;color:#594236}
@@ -371,13 +384,14 @@ body.cinema #adbar, body.cinema #mute{display:none}
       <button class="btn sub" id="growBtn">そだてる<span class="badge hide" id="growBadge">！</span></button>
       <button class="btn sub" id="bookBtn">おもいで</button>
       <button class="btn sub ready hide" id="nextBtn">つぎの子</button>
+      <button class="btn sub hide" id="zukanBtn">ずかん</button>
     </div>
   </div>
 </div>
 
 <div class="overlay hide" id="resultView">
   <div class="card">
-    <div class="r-label">ここで ちからつきた</div>
+    <div class="r-label" id="rLabel">ここで ちからつきた</div>
     <div class="r-floor" id="rFloor"></div>
     <div class="r-dist" id="rDist"></div>
     <div id="rNew"></div>
@@ -387,6 +401,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
   </div>
   <button class="btn sub ready hide" id="rGrow" style="margin-top:12px">✨ そだてられる！</button>
   <button class="revive hide" id="reviveBtn">▶　広告を見て復活</button>
+  <button class="btn sub hide" id="noadsBtn" style="margin-top:8px;font-size:12px;padding:7px 14px">復活の広告を消す（30日 ￥100）</button>
   <div class="tap" id="rTap" style="visibility:hidden">タップでもう1回</div>
   <button class="btn sub hide" id="rHome" style="margin-top:10px;font-size:13px;padding:9px 18px">おうちへ もどる</button>
 </div>
@@ -462,6 +477,33 @@ body.cinema #adbar, body.cinema #mute{display:none}
   </div>
 </div>
 
+<!-- 復活の広告を消す（30日・100円）。いまは仮の購入画面 -->
+<div class="overlay hide" id="noadsView">
+  <div class="card" style="text-align:center;pointer-events:auto">
+    <div class="r-label">復活の広告を消す</div>
+    <div class="st-lock" style="margin-top:10px;color:#594236">
+      30日のあいだ、復活するときの動画広告が出なくなります。<br>
+      <span style="font-size:11px;color:#8A79B5">自動では更新されません。30日たったら、また広告つきに戻ります。</span>
+    </div>
+    <div class="adbox" id="noadsBox" style="display:none">
+      <div>ここに購入画面が入ります</div>
+      <div class="adcount"><span id="noadsCount">3</span></div>
+    </div>
+    <button class="btn sub ready" id="noadsBuy" style="margin-top:14px">￥100 で 30日 広告なし</button>
+    <button class="btn sub" id="noadsBack" style="margin-top:8px">やめる</button>
+  </div>
+</div>
+
+<!-- こんぷりーとBOOK（図鑑）。一周（つぎの子を迎える）すると開く -->
+<div class="overlay hide" id="zukanView">
+  <div class="card" style="min-width:min(336px,93vw);pointer-events:auto;max-height:86vh;overflow:auto">
+    <div class="r-label">こんぷりーとBOOK</div>
+    <div class="zk-rate" id="zkRate"></div>
+    <div id="zkList"></div>
+    <button class="btn sub" id="zukanBack" style="margin-top:10px">もどる</button>
+  </div>
+</div>
+
 <div class="overlay hide" id="retireView">
   <div class="card" style="text-align:center;pointer-events:auto">
     <div class="r-label">つぎの子</div>
@@ -513,6 +555,8 @@ const JV2 = 620;          // 2段ジャンプの初速
 const COYOTE = 0.09;      // 足場を離れてからもジャンプできる猶予
 const PX_PER_M = 32;      // 32px = 1m
 const FLOOR_M = 50;       // 50mごとに1階層
+const GOAL_FLOOR = 25;    // 地下25階の奥がゴール（ゆま指定 9/17。どのステージもクリアできる）
+const GOAL_M = GOAL_FLOOR * FLOOR_M;
 const STEP = 1/120;       // 物理は固定刻みで回す（端末の速さで結果が変わらないように）
 
 // 横幅を480→360に狭めたぶん速さも0.8倍にし、先が見えてから届くまでの時間を保つ
@@ -595,6 +639,7 @@ const CEIL_BOTTOM = -70;
 function makeRun(opt = {}){
   return {
     cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
+    goalX: opt.goal ? GOAL_M * PX_PER_M + PX : 0, cleared: false, gemTotal: 0,
     gems: [], magnet: opt.magnet ?? 0,
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
@@ -640,6 +685,7 @@ function generate(run){
   const limit = run.cam + W + 400;
   if(!run.tAt) run.tAt = travelTime(PX, run.nextX);   // 走り始めてから最初の障害物に着くまで
   while(run.nextX < limit){
+    if(run.goalX && run.nextX > run.goalX - 260) break;   // ゴールの手前は何も置かない
     const m = run.nextX / PX_PER_M;
     const tier = tierFor(m);
     const pool = [];
@@ -656,8 +702,10 @@ function generate(run){
     if(r < 0.60){
       const mid = (run.nextX + end) / 2;
       for(let i = -1; i <= 1; i++) run.gems.push({ x: mid + i * 26, y: i === 0 ? -86 : -64, got: false });
+      run.gemTotal += 3;
     }else if(r < 0.80){
       run.gems.push({ x: end + 46, y: -R - 10, got: false });
+      run.gemTotal += 1;
     }
     run.nextX = advanceBy(end, snapped - tEnd);
     run.tAt = snapped;
@@ -697,6 +745,7 @@ function stepRun(run, dt){
   if(run.gen) generate(run);
 
   const wx = run.cam + PX;
+  if(run.goalX && wx >= run.goalX){ run.cleared = true; return; }
   const pit = inPit(run, wx);
 
   if(P.onGround && pit){ P.onGround = false; P.coy = COYOTE; }
@@ -783,7 +832,9 @@ const store = {
    強くなって楽になってしまうと「腕前で深さが決まる」という芯が壊れるので、
    効果はぜんぶ「稼ぎ」の側に付けてある。
    ========================================================= */
-const LINES = ["slime", "beast", "human_m", "human_f"];
+const LINES = ["slime", "beast", "human_m", "human_f", "human", "slime_hard"];   // 絵を読みこむ系統ぜんぶ
+const PICK1 = ["slime", "beast", "human"];          // 第1段階→第2段階で選べる道
+const NORMAL_ENDS = ["slime", "beast", "human_m", "human_f"];   // 「ノーマル進化」の行き止まり（むずかしいの解放条件）
 const LINE_INFO = {
   slime: {
     label: "スライム", acc: "#FFD86B", perk: "gem",
@@ -796,6 +847,21 @@ const LINE_INFO = {
     desc: "はなれた クリスタルを 引きよせる",
     body:  ["#42E6E0", "#FFC98F", "#FFB170", "#FF9257", "#F06A45"],
     names: ["ぽよん", "みみぽよ", "もふしっぽ", "きばのけもの", "げんじゅうフェンリル"],
+  },
+  // ヒトガタは第2段階までは1つの姿。第3段階でオス・メスに分かれる（ゆま指定 9/17）
+  human: {
+    label: "ヒトガタ", acc: "#B9A7FF", perk: "rhythm", story: "human",
+    desc: "リズムの ボーナスが ふえる",
+    body:  ["#42E6E0", "#D6DDF5", "#C9CFF0", "#BCC2EC", "#AFB5E8"],
+    names: ["ぽよん", "てのあるヒトガタ", "ヒトガタ", "ヒトガタ", "ヒトガタ"],
+  },
+  // スライムの第5段階の、もうひとつの行き先。ノーマル進化を全部5段階まで育てて、
+  // さらに地下25階をノーミス・クリスタルぜんぶでクリアすると選べる（ゆま指定 9/17）
+  slime_hard: {
+    label: "スライム（むずかしい）", acc: "#FF5A73", perk: "gem", story: "slime_hard",
+    desc: "クリスタルを 多めに 持ち帰る",
+    body:  ["#42E6E0", "#3FD5EA", "#38BEF0", "#5AA0F7", "#6B5BD6"],
+    names: ["ぽよん", "つやぽよ", "きらめきゼリー", "だいおうスライム", "しんえんの スライム"],
   },
   human_m: {
     label: "ヒトガタ♂", acc: "#7FB3FF", perk: "rhythm", story: "human",
@@ -816,7 +882,20 @@ const LINE_PARTS = {
   beast: [[], ["ears"], ["ears", "tail"], ["ears", "tail", "mane"], ["ears", "tail", "mane", "horns"]],
   human_m: [[], ["arms"], ["arms", "scarf"], ["arms", "scarf", "cap"], ["arms", "scarf", "cap", "cape"]],
   human_f: [[], ["arms"], ["arms", "ribbon"], ["arms", "ribbon", "hat"], ["arms", "ribbon", "hat", "cape"]],
+  human:   [[], ["arms"], ["arms"], ["arms"], ["arms"]],
+  slime_hard: [[], ["gem"], ["gem", "drops"], ["gem", "crown"], ["gem", "crown", "aura"]],
 };
+// 絵の読み替え。ヒトガタ♂♀の第2段階は共通の姿、むずかしいの第2〜4段階はスライムと同じ姿
+const evoKey = f => (f.line.indexOf("human") === 0 && f.stage === 2) ? "human_2"
+                  : (f.line === "slime_hard" && f.stage < 5) ? `slime_${f.stage}` : `${f.line}_${f.stage}`;
+function evoImg(f){
+  const im = IMG[`evo_${evoKey(f)}`];
+  if(ready(im)) return im;
+  // 新しい姿の絵がまだ無いあいだの代わり
+  if(evoKey(f) === "human_2") return IMG.evo_human_m_2;
+  if(evoKey(f) === "slime_hard_5") return IMG.evo_slime_5;
+  return im;
+}
 const SIZE_UP  = [1, 1.05, 1.10, 1.15, 1.20];      // 見た目だけ少し大きくなる
 const EVO_COST = [0, 0, 25, 70, 160, 350];         // その段階になるのに要るクリスタル
 const NAMES0 = ["ぷに", "もち", "ぽむ", "あおた", "ちゃぽ", "こはく", "るる", "みどり"];
@@ -1007,12 +1086,43 @@ const RESCUE_TAG = {
   human: "雨の駅まで、{n}を迎えにいく話。",
 };
 const PRICE = "￥240";
+/* スライム（むずかしい）。第1〜4章はスライムと同じで、第5章と救いの章だけが違う。
+   ノーミスで地下25階まで行けた人だけが読む話なので、舞台もいちばん深い階にしてある。
+   ⚠️ 下書き（9/17）。ゆまのOKが出てから絵を作る */
+STORY.slime_hard = { label: "スライム（むずかしい）", ch: [ ...STORY.slime.ch.slice(0, 4),
+  { t: "いちばん深いところ", p: [
+    "秋祭りの前の晩だった。{n}は庭で丸くなったまま、じっと村の灯りを見ていた。",
+    "坂の下から、たいまつの列がのぼってくるより早く——あの子は、自分から小屋の石段を下りていった。",
+    "大きな体を石段にこすりつけながら、一段ずつ、ずっと下へ。",
+    "朝になると、戸の前に光る石が山のように積んであった。これまでで いちばん多い、最後のおみやげ。",
+    "追いかけた。地下十階、十五階、二十階。そこから先は、誰も下りたことがない。",
+    "地下二十五階。いちばん深い部屋で、{n}は洞窟いっぱいに広がって、光っていた。",
+    "天井も、壁も、足もとのクリスタルも、ぜんぶが あの子の体だった。",
+    "「帰ろう」と呼んだ。光が、ぷるん、ぷるん、と二回ゆれた。",
+    "それから、ゆっくり首を振るみたいに、暗くなった。",
+    "ここにいれば、誰もこわがらない。誰も槍を持ってこない。——あの子は、そう決めたのだ。",
+    "石段を上るとき、背中のほうで、光る石がひとつ、コトンと転がる音がした。",
+  ]},
+], rescue: { t: "ひとつずつ、かえしにいく", p: [
+    "次の晩から、光る石を持って石段を下りた。あの子が運んでくれた石を、ひとつずつ、あの子に返しに。",
+    "地下二十五階まで、転ばずに。ひとつも落とさずに。そうしないと、届かない気がした。",
+    "石を置くたび、洞窟の光が、ほんの少しだけ小さくなった。",
+    "百日めの晩。部屋の真ん中に、見上げるくらいの大きさの{n}がいた。",
+    "「もう、これで最後」。残りの石を、ぜんぶ足もとに並べた。",
+    "{n}はしばらく石を見て、それから、こっちを見た。",
+    "ぷるん。ぷるん。——二回。",
+    "帰りの石段は、行きよりずっと狭く感じた。あの子が、うしろからぴったりついてくるから。",
+    "次の秋祭りの夜。戸口の柱に、村の子どもが新しい傷をつけていった。「{n}の背くらべ」。",
+    "取りこんだものを返した{n}は、もう、あの柱の傷より大きくならない。",
+    "それでいい。今年は、いっしょに たいまつの列を見にいく。",
+]}};
+RESCUE_TAG.slime_hard = "地下二十五階まで、光る石を返しにかよった百日の話。";
 
-const SLINES = ["slime", "beast", "human"];               // おはなしの本数（ヒトガタはオス・メスで同じ話）
-const SLABEL = { slime: "スライム", beast: "けもの", human: "ヒトガタ" };
+const SLINES = ["slime", "beast", "human", "slime_hard"];   // おはなしの本数（ヒトガタはオス・メスで同じ話。むずかしいは第5章と救いの章だけ別）
+const SLABEL = { slime: "スライム", beast: "けもの", human: "ヒトガタ", slime_hard: "むずかしい" };
 const skey = line => (LINE_INFO[line] && LINE_INFO[line].story) || line;
-const story  = store.get("poyon_story",  { slime: 1, beast: 1, human: 1 });   // 系統ごとに開いた章
-const rescue = store.get("poyon_rescue", { slime: false, beast: false, human: false });
+const story  = Object.assign({ slime: 1, beast: 1, human: 1, slime_hard: 1 }, store.get("poyon_story", {}));   // 系統ごとに開いた章
+const rescue = Object.assign({ slime: false, beast: false, human: false, slime_hard: false }, store.get("poyon_rescue", {}));
 function saveStory(){ store.set("poyon_story", story); store.set("poyon_rescue", rescue); }
 
 const pet = {
@@ -1022,8 +1132,28 @@ const pet = {
   gems:  store.get("poyon_gems", 0),
   total: store.get("poyon_total", 0),      // これまでに運んできた ぜんぶ
 };
+// 前の版で第2段階のヒトガタ♂♀だった子は、共通のヒトガタに読み替える（第3段階で分かれる仕様に変わったため）
+if(pet.stage === 2 && (pet.line === "human_m" || pet.line === "human_f")) pet.line = "human";
 // 育てきった子たち。小屋に残って、つぎの子の稼ぎを手伝ってくれる
 const family = store.get("poyon_family", []);
+/* やりこみの記録
+   done＝その道を第5段階まで育てた／perfect＝地下25階をノーミス・クリスタルぜんぶでクリアした／
+   seen＝図鑑用。出会った姿（"系統_段階"）／clears＝ゴールした回数 */
+const prog = Object.assign({ done: {}, perfect: false, seen: {}, clears: 0 }, store.get("poyon_prog", {}));
+function saveProg(){ store.set("poyon_prog", prog); }
+function markSeen(line, stage){
+  for(let n = 1; n <= stage; n++){
+    const l = n === 1 ? "slime" : (line.indexOf("human") === 0 && n === 2) ? "human"
+            : (line === "slime_hard" && n < 5) ? "slime" : line;
+    prog.seen[`${l}_${n}`] = true;
+  }
+  if(stage >= 5 && NORMAL_ENDS.includes(line)) prog.done[line] = true;
+  saveProg();
+}
+family.forEach(f => markSeen(f.line, 5));
+markSeen(pet.line, pet.stage);
+const hardUnlocked = () => NORMAL_ENDS.every(l => prog.done[l]) && prog.perfect;
+const bookUnlocked = () => family.length >= 1;   // 図鑑は一周（つぎの子を迎える）してから
 const famBonus = () => 1 + 0.10 * Math.min(6, family.length);
 function savePet(){
   store.set("poyon_pet_name", pet.name); store.set("poyon_pet_line", pet.line);
@@ -1270,20 +1400,21 @@ function refreshHome(){
   $("growBadge").classList.toggle("hide", !canEvolve());
   $("bookBtn").classList.toggle("ready", hasNewStory());
   $("nextBtn").classList.toggle("hide", !canRetire());
+  $("zukanBtn").classList.toggle("hide", !bookUnlocked());
   $("growBtn").classList.toggle("hide", pet.stage >= 5 && canRetire());
   $("growBtn").classList.toggle("ready", canEvolve());
 }
 function start(){
   game.mode = "play"; game.ui = null;
   game.runGems = 0;
-  game.run = makeRun({ magnet: perk("magnet") });
+  game.run = makeRun({ magnet: perk("magnet"), goal: true });
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
   game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.revived = false; game.passedDeath = false;
   musicStart();
   game.prevBest = game.best;
   $("titleView").classList.add("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
 }
-const floorOf = m => Math.floor(m / FLOOR_M) + 1;
+const floorOf = m => Math.min(GOAL_FLOOR, Math.floor(m / FLOOR_M) + 1);
 
 function die(){
   const run = game.run, m = run.cam / PX_PER_M;
@@ -1303,6 +1434,7 @@ function die(){
   if(isNew){ game.best = score; store.set("poyon_best_m", score); }
   setTimeout(() => {
     if(game.mode !== "dead") return;
+    $("rLabel").textContent = "ここで ちからつきた";
     $("rFloor").textContent = `地下 ${floorOf(m)} 階`;
     $("rDist").innerHTML = `${Math.floor(m)} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
       <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
@@ -1313,6 +1445,8 @@ function die(){
     $("rGems").innerHTML = `💎 ＋${earned}${earned > game.runGems ? `<span style="font-size:11px;color:#C98016">（${game.runGems}＋おまけ）</span>` : ""}　もちもの <b>${pet.gems}</b>`;
     $("rGrow").classList.toggle("hide", !canEvolve());
     $("reviveBtn").classList.toggle("hide", game.revived);
+    $("reviveBtn").textContent = noAds() ? "▶　復活する（広告なし）" : "▶　広告を見て復活";
+    $("noadsBtn").classList.toggle("hide", game.revived || noAds());
     $("resultView").classList.remove("hide");
     $("rHome").classList.add("hide");
     $("rTap").style.visibility = "hidden";
@@ -1323,6 +1457,58 @@ function die(){
       $("rHome").classList.remove("hide");
     }, 450);
   }, 650);
+}
+
+/* ---- ゴール（地下25階の奥）----
+   ノーミス（復活なし）で、その回に出たクリスタルをぜんぶ拾えていたら perfect。
+   perfect はスライムの「むずかしい」に進む条件のひとつ */
+function clearRun(){
+  const run = game.run, m = GOAL_M;
+  const score = m + game.bonus;
+  const earned = Math.round(game.runGems * perk("gem") * famBonus());
+  pet.gems += earned; pet.total += earned; savePet();
+  const perfect = !game.revived && game.runGems >= run.gemTotal;
+  prog.clears++; if(perfect) prog.perfect = true; saveProg();
+  game.lastDeath = 0; store.set("poyon_lastdeath_m", 0);
+  game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m, clear: true, perfect };
+  if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
+  game.mode = "clear"; game.deadAt = game.time; game.combo = 0;
+  musicStop();
+  SFX.rec();
+  for(let i = 0; i < 4; i++) setTimeout(() => burst(W / 2 + (Math.random() - .5) * 200, GY - 60 - Math.random() * 80, 30, i % 2 ? "#FFD13B" : "#8CF6F2", 260, 90), i * 180);
+  const isNew = score > game.best;
+  if(isNew){ game.best = score; store.set("poyon_best_m", score); }
+  setTimeout(() => {
+    if(game.mode !== "clear") return;
+    $("rLabel").textContent = "ゴール！　クリア";
+    $("rFloor").textContent = `地下 ${GOAL_FLOOR} 階`;
+    $("rDist").innerHTML = `${m} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
+      <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
+    $("rNew").innerHTML = perfect ? `<span class="newrec">ノーミス ＆ クリスタル ぜんぶ！</span>`
+                        : (isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "");
+    $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
+    $("rGap").textContent = perfect ? "" : `クリスタル ${game.runGems} / ${run.gemTotal}` + (game.revived ? "　（復活を使った）" : "");
+    $("rGems").innerHTML = `💎 ＋${earned}　もちもの <b>${pet.gems}</b>`;
+    $("rGrow").classList.toggle("hide", !canEvolve());
+    $("reviveBtn").classList.add("hide"); $("noadsBtn").classList.add("hide");
+    $("resultView").classList.remove("hide");
+    $("rHome").classList.add("hide");
+    $("rTap").style.visibility = "hidden";
+    setTimeout(() => {
+      if(game.mode !== "clear") return;
+      $("rTap").style.visibility = "visible";
+      $("rHome").classList.remove("hide");
+    }, 450);
+  }, 900);
+}
+
+/* ---- 復活の広告を消す（30日・100円）---- */
+const noAds = () => Date.now() < store.get("poyon_noads_until", 0);
+function openNoAds(){
+  game.ui = "noads";
+  $("noadsBox").style.display = "none";
+  $("noadsBuy").classList.remove("hide"); $("noadsBack").classList.remove("hide");
+  $("noadsView").classList.remove("hide");
 }
 
 /* 動画広告。いまは仮の画面（5秒数えて閉じる）。
@@ -1375,32 +1561,42 @@ function renderEvo(){
   box.innerHTML = ""; chart.innerHTML = ""; pick.innerHTML = "";
   $("evoGems").textContent = pet.gems;
 
-  if(pet.stage === 1){
-    // はじめの一回だけ、どの道に進むかを選ぶ
-    chart.classList.add("hide");
-    const cost = EVO_COST[2], ok = pet.gems >= cost;
-    for(const line of LINES){
+  // 分かれ道：第1→2段階（3つの道）／ヒトガタ第2→3段階（オス・メス）／スライム第4→5段階（ふつう・むずかしい）
+  const fork = pet.stage === 1 ? PICK1
+             : (pet.line === "human" && pet.stage === 2) ? ["human_m", "human_f"]
+             : (pet.line === "slime" && pet.stage === 4) ? ["slime", "slime_hard"] : null;
+  if(fork){
+    const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost;
+    if(pet.stage === 1) chart.classList.add("hide");
+    else drawChart(pet.line, pet.stage);
+    for(const line of fork){
       const info = LINE_INFO[line];
+      const locked = line === "slime_hard" && !hardUnlocked();
       const el = document.createElement("button");
-      el.className = "ecard" + (ok ? "" : " off") + (evoPick === line ? " sel" : "");
-      el.appendChild(formThumb(line, 2, 82));
+      el.className = "ecard" + (ok && !locked ? "" : " off") + (evoPick === line ? " sel" : "");
+      el.appendChild(formThumb(line, next, 82, locked));
+      const lockNote = locked
+        ? `<div class="ec-desc" style="color:#C0506A">🔒 ${NORMAL_ENDS.every(l => prog.done[l]) ? "" : "ノーマル進化を ぜんぶ 第5段階まで育てる<br>"}${prog.perfect ? "" : "地下25階を ノーミス・クリスタルぜんぶ で クリア"}</div>`
+        : `<div class="ec-desc">${info.desc}</div>`;
       el.insertAdjacentHTML("beforeend",
-        `<div class="ec-line">${info.label}</div>
-         <div class="ec-name">${info.names[1]}</div>
-         <div class="ec-desc">${info.desc}</div>
+        `<div class="ec-line">${line === "slime_hard" ? "むずかしい" : info.label}</div>
+         <div class="ec-name">${locked ? "？？？" : info.names[next - 1]}</div>
+         ${lockNote}
          <div class="ec-cost">💎 ${cost}</div>`);
-      if(ok) el.addEventListener("pointerdown", ev => {
+      if(ok && !locked) el.addEventListener("pointerdown", ev => {
         ev.stopPropagation(); ev.preventDefault();
         evoPick = line; renderEvo();
       });
       box.appendChild(el);
     }
+    const what = pet.stage === 1 ? "どの道にすすむか" : pet.stage === 2 ? "オスとメス、どちらにするか" : "どちらの道にすすむか";
     if(!ok){
       $("evoNote").textContent = `あと 💎${cost - pet.gems} で進化できる`;
     }else if(!evoPick){
-      $("evoNote").innerHTML = `どの道にすすむか、ここで決める<div class="warn">えらんだら、もう別の道には行けない</div>`;
+      $("evoNote").innerHTML = `${what}、ここで決める<div class="warn">えらんだら、もう別の道には行けない</div>`;
     }else{
-      $("evoNote").innerHTML = `<div class="warn">「${LINE_INFO[evoPick].label}」の道でいい？　あとから変えられない</div>`;
+      const nm = evoPick === "slime_hard" ? "むずかしい" : LINE_INFO[evoPick].label;
+      $("evoNote").innerHTML = `<div class="warn">「${nm}」にすすむ？　あとから変えられない</div>`;
       const b = document.createElement("button");
       b.className = "btn sub ready"; b.style.marginTop = "6px";
       b.textContent = `この道にすすむ（💎${cost}）`;
@@ -1410,17 +1606,9 @@ function renderEvo(){
     return;
   }
 
-  // 二回目からは、選んだ道の先しかない
-  chart.classList.remove("hide");
+  // 分かれ道でなければ、選んだ道の先しかない
+  drawChart(pet.line, pet.stage);
   const info = LINE_INFO[pet.line];
-  for(let n = 1; n <= 5; n++){
-    const seen = n <= pet.stage + 1;                 // 次の姿までは見せる
-    const el = document.createElement("div");
-    el.className = "step" + (n <= pet.stage ? " on" : "") + (n === pet.stage ? " now" : "");
-    el.appendChild(formThumb(pet.line, n, 54, !seen));
-    el.insertAdjacentHTML("beforeend", `<div class="st-nm">${seen ? info.names[n - 1] : "？？？"}</div>`);
-    chart.appendChild(el);
-  }
   if(pet.stage >= 5){
     $("evoNote").textContent = "この道の、いちばん先まで来た。";
     return;
@@ -1442,15 +1630,35 @@ function renderEvo(){
   else b.disabled = true;
   pick.appendChild(b);
 }
+// いまの道の5段階を並べる（先の姿は影）。分かれ道の手前では、まだ決まっていない先は「？？？」
+function drawChart(line, stage){
+  const chart = $("evoChart");
+  chart.classList.remove("hide"); chart.innerHTML = "";
+  const info = LINE_INFO[line];
+  const openEnd = line === "human" ? 2 : 5;
+  for(let n = 1; n <= 5; n++){
+    const seen = n <= stage + 1 && n <= openEnd;
+    const el = document.createElement("div");
+    el.className = "step" + (n <= stage ? " on" : "") + (n === stage ? " now" : "");
+    el.appendChild(formThumb(n <= openEnd ? line : "human_m", n, 54, !seen));
+    el.insertAdjacentHTML("beforeend", `<div class="st-nm">${seen ? info.names[n - 1] : "？？？"}</div>`);
+    chart.appendChild(el);
+  }
+}
 function closeEvo(){ game.ui = null; $("evoView").classList.add("hide"); }
 
 function doEvolve(line){
   if(pet.stage >= 5) return;
-  if(pet.stage > 1 && line !== pet.line) return;   // いちど選んだ道からは外れない
+  const fork = (pet.line === "human" && pet.stage === 2 && (line === "human_m" || line === "human_f"))
+            || (pet.line === "slime" && pet.stage === 4 && line === "slime_hard" && hardUnlocked());
+  if(pet.stage > 1 && line !== pet.line && !fork) return;   // いちど選んだ道からは外れない（決まった分かれ道だけ例外）
   const next = pet.stage + 1, cost = EVO_COST[next];
   if(pet.gems < cost) return;
   pet.gems -= cost; pet.line = line; pet.stage = next; savePet();
+  // むずかしいに進んだら、スライムで読んだ第1〜4章をそのまま引き継ぐ
+  if(line === "slime_hard") story.slime_hard = Math.max(story.slime_hard, story.slime);
   unlockStory(skey(line), next);
+  markSeen(line, next);
   closeEvo();
   if(game.mode !== "title") showTitle();
   refreshHome();
@@ -1521,12 +1729,13 @@ const NV = { key: null, n: 1, i: 0, lines: [], typing: null, done: false, raf: 0
    ヒトガタの章（2〜5・救い）は、育てた子に合わせて m / f の絵を使う */
 function sceneId(key, n){
   if(n === 1) return "c1";
+  if(key === "slime_hard") return n >= 1 && n <= 4 ? "s" + n : "sx" + n;
   const k = { slime: "s", beast: "b", human: "h" }[key];
   const g = key === "human" && n !== 1 ? (pet.line === "human_m" ? "m" : "f") : "";   // ヒトガタは第2章から♂♀で絵が違う（♀はピンク）
   return k + n + g;
 }
 // 何文目から2枚目の絵に切り替えるか（書いていない章は半分のところ）
-const SCENE_AT = { c1: 3, s2: 4, s3: 3, s4: 2, s5: 4, s0: 5, b2: 3, b3: 3, b4: 3, b5: 5, b0: 5, h2: 2, h3: 3, h4: 3, h5: 4, h0: 4 };
+const SCENE_AT = { sx5: 5, sx0: 4, c1: 3, s2: 4, s3: 3, s4: 2, s5: 4, s0: 5, b2: 3, b3: 3, b4: 3, b5: 5, b0: 5, h2: 2, h3: 3, h4: 3, h5: 4, h0: 4 };
 
 function sceneShow(tag){
   if(NV.n < 0) return;
@@ -1748,11 +1957,12 @@ function voiceExtra(r){
 }
 function pickVoice(){
   const r = game.lastRun || { gems: 0 };
-  const key = pet.stage <= 1 ? "base" : pet.line;
+  const vl = pet.line === "slime_hard" ? "slime" : pet.line === "human" ? "human_m" : pet.line;
+  const key = pet.stage <= 1 ? "base" : vl;
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const lines = [];
   if(r.gems <= 0) lines.push(VOICE_ZERO[key] || VOICE_ZERO.base);
-  else lines.push(pick(pet.stage <= 1 ? VOICE.base : VOICE[pet.line][pet.stage]));
+  else lines.push(pick(pet.stage <= 1 ? VOICE.base : VOICE[vl][pet.stage]));
   const ex = voiceExtra(r);
   if(ex) lines.push(ex);
   return lines.map(x => x.replace(/\{n\}/g, pet.name).replace(/\{g\}/g, r.gems));
@@ -1779,6 +1989,47 @@ function openTalk(){
   nvLine();
 }
 
+/* ---- こんぷりーとBOOK（図鑑）----
+   出会った姿（進化で見た姿）と、読んだ章・救いの章をまとめて、どれだけ集めたかを出す。
+   まだの姿は影、まだの章は数だけ */
+const ZUKAN = [
+  { t: "はじまり",               forms: [["slime", 1]],                                                   story: null },
+  { t: "スライム",               forms: [["slime", 2], ["slime", 3], ["slime", 4], ["slime", 5]],         story: "slime" },
+  { t: "スライム（むずかしい）", forms: [["slime_hard", 5]],                                              story: "slime_hard" },
+  { t: "けもの",                 forms: [["beast", 2], ["beast", 3], ["beast", 4], ["beast", 5]],         story: "beast" },
+  { t: "ヒトガタ",               forms: [["human", 2], ["human_m", 3], ["human_m", 4], ["human_m", 5],
+                                         ["human_f", 3], ["human_f", 4], ["human_f", 5]],                 story: "human" },
+];
+function openZukan(){
+  game.ui = "zukan";
+  const list = $("zkList"); list.innerHTML = "";
+  let got = 0, all = 0;
+  for(const sec of ZUKAN){
+    list.insertAdjacentHTML("beforeend", `<div class="zk-sec">${sec.t}</div>`);
+    const grid = document.createElement("div"); grid.className = "zk-grid";
+    for(const [line, n] of sec.forms){
+      const has = !!prog.seen[`${line}_${n}`];
+      all++; if(has) got++;
+      const cell = document.createElement("div"); cell.className = "zk-cell" + (has ? " got" : "");
+      cell.appendChild(formThumb(line, n, 58, !has));
+      cell.insertAdjacentHTML("beforeend", `<div>${has ? (n === 1 ? "ぽよん" : LINE_INFO[line].names[n - 1]) : "？？？"}</div>`);
+      grid.appendChild(cell);
+    }
+    list.appendChild(grid);
+    if(sec.story){
+      const k = sec.story;
+      const chs = k === "slime_hard" ? [5] : [1, 2, 3, 4, 5];
+      const read = chs.filter(n => story[k] >= n).length;
+      all += chs.length + 1; got += read + (rescue[k] ? 1 : 0);
+      list.insertAdjacentHTML("beforeend",
+        `<div class="zk-story">おはなし <b>${read} / ${chs.length}</b>　救いの章 <b>${rescue[k] ? "よんだ" : "まだ"}</b></div>`);
+    }
+  }
+  const pct = Math.round(got / all * 100);
+  $("zkRate").innerHTML = `あつめた <b>${pct}%</b>（${got} / ${all}）<div class="zk-bar"><i style="width:${pct}%"></i></div>`;
+  $("zukanView").classList.remove("hide");
+}
+
 let bookLine = "slime";
 function openBook(){
   game.ui = "book"; bookLine = skey(pet.line);
@@ -1787,6 +2038,7 @@ function openBook(){
 function renderBook(){
   const tabs = $("bookTabs"); tabs.innerHTML = "";
   for(const l of SLINES){
+    if(l === "slime_hard" && story.slime_hard < 5) continue;   // むずかしいは、進んだ人にだけ見せる
     const b = document.createElement("button");
     b.className = "tab" + (l === bookLine ? " on" : "");
     b.textContent = SLABEL[l];
@@ -1898,7 +2150,7 @@ function onPress(e){
     return;
   }
   if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); musicStart(); return; }
-  if(game.mode === "dead"){
+  if(game.mode === "dead" || game.mode === "clear"){
     // 結果が出てすぐのタップでは始めない（死んだ瞬間の連打で飛ばさないため）
     if(game.time - game.deadAt > 1.1) start();
     return;
@@ -1913,6 +2165,7 @@ document.addEventListener("visibilitychange", () => {
 $("reviveBtn").addEventListener("pointerdown", e => {
   e.stopPropagation(); e.preventDefault();
   if(game.mode !== "dead" || game.revived) return;
+  if(noAds()){ $("resultView").classList.add("hide"); revive(); return; }
   game.mode = "ad";
   showRewardAd(revive);
 });
@@ -1923,6 +2176,27 @@ tapBtn("goBtn",   () => { if(!game.ui) start(); });
 tapBtn("growBtn", () => { if(!game.ui) openEvo(); });
 tapBtn("evoBack", closeEvo);
 tapBtn("bookBtn", () => { if(!game.ui) openBook(); });
+tapBtn("zukanBtn", () => { if(!game.ui) openZukan(); });
+tapBtn("zukanBack", () => { game.ui = null; $("zukanView").classList.add("hide"); });
+tapBtn("noadsBtn", () => { if(!game.ui && game.mode === "dead") openNoAds(); });
+tapBtn("noadsBack", () => { game.ui = null; $("noadsView").classList.add("hide"); });
+tapBtn("noadsBuy", () => {
+  // 本物の課金を入れるときは purchase() と同じく、支払いが済んだら下の処理を呼ぶ
+  $("noadsBox").style.display = "";
+  $("noadsBuy").classList.add("hide"); $("noadsBack").classList.add("hide");
+  let left = 3; $("noadsCount").textContent = left;
+  const t = setInterval(() => {
+    left--; $("noadsCount").textContent = Math.max(0, left);
+    if(left <= 0){
+      clearInterval(t);
+      store.set("poyon_noads_until", Date.now() + 30 * 24 * 3600 * 1000);
+      game.ui = null; $("noadsView").classList.add("hide");
+      $("reviveBtn").textContent = "▶　復活する（広告なし）";
+      $("noadsBtn").classList.add("hide");
+      SFX.rec();
+    }
+  }, 1000);
+});
 tapBtn("nextBtn", () => { if(!game.ui) openRetire(); });
 tapBtn("reBack", () => { game.ui = null; $("retireView").classList.add("hide"); });
 tapBtn("reOk", newChild);
@@ -1989,13 +2263,14 @@ function leaveStart(){
 // 育てなおす：課金で買った救いの章と、音の設定だけ残して、ほかは消す
 function restartAll(){
   for(const k of ["poyon_pet_name", "poyon_pet_line", "poyon_pet_stage", "poyon_gems", "poyon_total",
-                  "poyon_family", "poyon_story", "poyon_best_m", "poyon_bestdist_m", "poyon_lastdeath_m", "poyon_intro_done"]){
+                  "poyon_family", "poyon_story", "poyon_best_m", "poyon_bestdist_m", "poyon_lastdeath_m", "poyon_intro_done", "poyon_prog"]){
     try{ localStorage.removeItem(k); }catch(e){}
   }
   pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
   pet.line = "slime"; pet.stage = 1; pet.gems = 0; pet.total = 0;
   family.length = 0;
-  story.slime = 1; story.beast = 1; story.human = 1;
+  story.slime = 1; story.beast = 1; story.human = 1; story.slime_hard = 1;
+  prog.done = {}; prog.perfect = false; prog.seen = {}; prog.clears = 0; markSeen("slime", 1);
   game.best = 0; game.bestDist = 0; game.lastDeath = 0; game.lastRun = null;
   savePet(); saveStory();
   $("titleBest").classList.add("hide");
@@ -2058,13 +2333,19 @@ for(let i = 1; i <= 9; i++) loadImg("s" + i, "slime_0" + i + ".png");
 loadImg("crystal", "prop_01.png"); loadImg("mushroom", "prop_02.png"); loadImg("bat", "prop_03.png");
 loadImg("spike1", "obst_01.png");   // 一本だけのトゲ（端が切れていない完全な形）
 loadImg("spike3", "obst_03.png");   // 三本並びのトゲ
-loadImg("hang",   "obst_02.png");   // 天井から下がる岩 loadImg("sign",     "prop_05.png"); loadImg("chest", "prop_06.png");
+loadImg("hang",   "obst_02.png");   // 天井から下がる岩
+loadImg("sign",   "prop_05.png"); loadImg("chest", "prop_06.png");   // 看板・宝箱（前は上の行のコメントにまぎれて読みこまれていなかった）
 // Geminiに描いてもらった 小屋の背景と、進化した姿（系統×第2〜5段階）
 loadImg("hut", "hut_bg.png");
 for(let k = 0; k < 4; k++) loadImg(`run_slime_1_${k}`, `run/slime_1_${k}.png`);   // 第1段階（どの系統も同じ）
 for(const l of ["slime", "beast", "human_m", "human_f"]){
   for(let n = 2; n <= 5; n++) loadImg(`evo_${l}_${n}`, `evo_${l}_${n}.png`);
   for(let n = 2; n <= 5; n++) for(let k = 0; k < 4; k++) loadImg(`run_${l}_${n}_${k}`, `run/${l}_${n}_${k}.png`);
+}
+// 共通のヒトガタ第2段階と、むずかしい第5段階
+for(const key of ["human_2", "slime_hard_5"]){
+  loadImg(`evo_${key}`, `evo_${key}.png`);
+  for(let k = 0; k < 4; k++) loadImg(`run_${key}_${k}`, `run/${key}_${k}.png`);
 }
 const ready = im => im && im.complete && im.naturalWidth > 0;
 
@@ -2112,7 +2393,7 @@ const STAGE_BG = {
 const stageBg = {};
 function stageKey(){
   if(!pet || pet.stage < 2) return null;
-  const k = `${skey(pet.line)}_${pet.stage}`;
+  const k = `${skey(pet.line).replace("_hard", "")}_${pet.stage}`;
   return STAGE_BG[k] ? k : null;
 }
 function loadStageBg(k){
@@ -2287,8 +2568,29 @@ function roundRect(x, y, w, h, r){
 function drawSigns(run){
   const cam = run.cam;
   const f0 = Math.floor(cam / (FLOOR_M * PX_PER_M));
+  // ゴール（地下25階の奥）。宝箱と、天井から吊るした「ゴール」の看板
+  if(game.mode !== "title"){
+    const gx = GOAL_M * PX_PER_M - cam + PX;
+    if(gx > -60 && gx < W + 80){
+      const bob = Math.sin(game.time * 3) * 2;
+      const glow = ctx.createRadialGradient(gx, GY - 30, 4, gx, GY - 30, 90);
+      glow.addColorStop(0, "rgba(255,236,150,.55)"); glow.addColorStop(1, "rgba(255,236,150,0)");
+      ctx.fillStyle = glow; ctx.fillRect(gx - 90, GY - 120, 180, 130);
+      put(IMG.chest, gx + 46, GY + 2 + bob, 58);   // 着いた瞬間に子と重ならないよう、少し奥に
+      const sy = bandTop + 10, bw = 76, bh = 30;
+      ctx.strokeStyle = "#8A6A40"; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(gx - bw / 2 + 8, sy); ctx.lineTo(gx - bw / 2 + 11, sy + 12);
+      ctx.moveTo(gx + bw / 2 - 8, sy); ctx.lineTo(gx + bw / 2 - 11, sy + 12);
+      ctx.stroke();
+      ctx.fillStyle = "#FFE9A8"; roundRect(gx - bw / 2, sy + 12, bw, bh, 8); ctx.fill();
+      ctx.strokeStyle = COL.line; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = COL.ink; ctx.font = "900 16px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("ゴール", gx, sy + 12 + bh / 2 + 1);
+    }
+  }
   for(let f = f0; f <= f0 + 1; f++){
-    if(f < 1) continue;
+    if(f < 1 || f + 1 > GOAL_FLOOR) continue;
     const x = f * FLOOR_M * PX_PER_M - cam + PX;
     if(x < -40 || x > W + 40) continue;
     // 地面に置くと障害物に見えるので、天井から吊るす看板にする
@@ -2622,7 +2924,7 @@ function drawCreature(g, f, cx, baseY, h, opt = {}){
   const t  = opt.t != null ? opt.t : game.time;
   const sx = opt.sx != null ? opt.sx : 1, sy = opt.sy != null ? opt.sy : 1;
   // 第2段階からはGeminiの絵。横幅をぽよんに合わせて、背の高い姿は上限で止める
-  const ev = f.stage >= 2 ? IMG[`evo_${f.line}_${f.stage}`] : null;
+  const ev = f.stage >= 2 ? evoImg(f) : null;
   // 走っている姿（Geminiの横向き4コマ）。大きさは正面の絵と同じ高さにそろえる
   if(opt.run && ready(opt.run)){
     let hh;
@@ -2701,10 +3003,12 @@ const POSE_H = { s1:40, s3:54, s4:40, s5:44, s7:26, s9:38 };
 // 横向きに走る4コマ（assets/run/{系統}_{段階}_{0〜3}.png、第1段階は slime_1）。そろっていなければ null
 function runFrame(P){
   if(game.mode !== "play") return null;
-  const key = pet.stage === 1 ? "slime_1" : `${pet.line}_${pet.stage}`;
+  let key = pet.stage === 1 ? "slime_1" : evoKey(pet);
+  if(key === "human_2" && !ready(IMG.run_human_2_0)) key = "human_m_2";          // 共通の姿の走り絵ができるまでの代わり
+  if(key === "slime_hard_5" && !ready(IMG.run_slime_hard_5_0)) key = "slime_5";
   const fr = [0, 1, 2, 3].map(k => IMG[`run_${key}_${k}`]);
   if(!fr.every(ready)) return null;
-  const blob = pet.stage === 1 || pet.line === "slime";
+  const blob = pet.stage === 1 || pet.line === "slime" || pet.line === "slime_hard";
   if(!P.onGround){
     const f = blob ? (P.vy < 0 ? fr[1] : fr[2]) : fr[1];
     f._blobLift = 0;
@@ -2751,7 +3055,7 @@ function drawSlime(run){
   }
   const im = slimePose(P);
   const key = Object.keys(IMG).find(k => IMG[k] === im);
-  if(pet.stage >= 2 && ready(IMG[`evo_${pet.line}_${pet.stage}`])){
+  if(pet.stage >= 2 && ready(evoImg(pet))){
     let ex = sx, ey = sy;
     const human = isHuman(pet);
     if(game.mode === "dead"){ ex = 1.25; ey = 0.7; }
@@ -2983,7 +3287,7 @@ function label(text, x, y, size, col){
 }
 
 function drawHUD(run){
-  if(game.mode === "title" || game.mode === "dead") return;
+  if(game.mode === "title" || game.mode === "dead" || game.mode === "clear") return;
   // 拾ったクリスタル
   ctx.textAlign = "left"; ctx.textBaseline = "top";
   label(`💎 ${game.runGems}`, 12, 12, 17, "#2E7C9E");
@@ -2997,7 +3301,7 @@ function drawHUD(run){
   // （別の場所に文字を出すと、HUDや遊ぶ帯と重なって読みにくくなる）
   const fl = Math.max(0, Math.min(1, game.floorFlash));
   label(`地下 ${floorOf(m)} 階`, hx, y - fl * 4, (roomy ? 34 : 20) * (1 + 0.3 * fl), fl > 0.02 ? "#C98016" : "#5B4A86");
-  label(`${Math.floor(m)} m`, hx, y + (roomy ? 42 : 24), roomy ? 20 : 13, "#7A68A8");
+  label(`${Math.floor(m)} m ／ ゴール ${GOAL_M} m`, hx, y + (roomy ? 42 : 24), roomy ? 18 : 12, "#7A68A8");
   if(game.bonus > 0){
     label(`リズム ＋${game.bonus}`, hx, y + (roomy ? 70 : 40), roomy ? 16 : 12, "#C98016");
   }
@@ -3050,6 +3354,7 @@ function frame(now){
         }
       }
       run.ev.length = 0;
+      if(run.cleared){ clearRun(); break; }
       if(run.P.dead){ die(); break; }
     }
     const md = run.cam / PX_PER_M;
