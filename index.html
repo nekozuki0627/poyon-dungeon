@@ -28,6 +28,7 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
 @media (max-aspect-ratio: 3/4){
   .overlay:not(#titleView){justify-content:flex-start;padding-top:max(9vh, calc(env(safe-area-inset-top) + 40px))}
   #titleView{padding-top:max(4vh, calc(env(safe-area-inset-top) + 16px))}
+  html:not(.wide) #titleView{padding-top:calc(max(4vh, env(safe-area-inset-top) + 16px) + 34px)}   /* 左上のもちものとロゴを重ねない */
   /* たて長のスマホ：ロゴは上、ボタンは下にまとめて、まん中の子を隠さない */
   #startView.overlay{justify-content:space-between;padding-top:max(4vh, calc(env(safe-area-inset-top) + 16px))}
   #startView .st-btns{display:flex;flex-direction:column;align-items:center;gap:12px}
@@ -52,7 +53,9 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
    こうしないと、なまえの札がスライムに重なってしまう */
 .home-bottom{
   /* 地面の線ぴったりだと、寝床や積んだクリスタルに名前の札が乗ってしまう。少し下げる */
-  position:fixed;left:0;right:0;top:calc(var(--ground,60%) + 44px);bottom:0;
+  position:fixed;left:0;right:0;bottom:0;
+  /* 縦が短いスマホでは、ボタンが広告の下にもぐらないよう、上に寄せる（下からボタンぶんの高さは必ず残す） */
+  top:min(calc(var(--ground,60%) + 44px), calc(100% - 56px - env(safe-area-inset-bottom) - 196px));
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   padding:6px 16px calc(56px + env(safe-area-inset-bottom));
 }
@@ -68,6 +71,11 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
   padding:4px 16px;font-size:15px;font-weight:900;color:#3E8FB8;border:2px solid #594236;
 }
 .gemline b{color:#2E7C9E}
+/* スマホ：もちものは左上にいつも出しておく */
+/* スマホ：下のボタンは1列に収める（折り返すと広告の下にもぐる） */
+html:not(.wide) #titleView .row{flex-wrap:nowrap;gap:6px;max-width:100%}
+html:not(.wide) #titleView .row .btn.sub{padding:10px 12px;font-size:14px;white-space:nowrap;flex:0 1 auto;min-width:0}
+html:not(.wide) #titleView .gemline{position:fixed;top:max(14px, env(safe-area-inset-top));left:12px;margin:0;pointer-events:none;z-index:5}
 .gemline small{font-size:11px;color:#C98016;margin-left:6px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:9px}
 .btn{
