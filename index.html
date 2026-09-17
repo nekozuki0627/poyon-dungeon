@@ -112,6 +112,15 @@ html.wide #titleView .btn.go{padding:12px 20px;font-size:clamp(17px,calc(var(--b
 html.wide .petname{max-width:100%}
 html.wide #titleView .pettitle{color:#594236;text-shadow:0 1px 0 rgba(255,255,255,.7)}
 
+/* ---- おうちに帰ったときの1枚絵 ---- */
+#homeSceneView{pointer-events:auto;z-index:20;justify-content:center !important;padding-top:24px !important;background:rgba(40,28,60,.55);animation:hsIn .35s ease-out}
+@keyframes hsIn{from{opacity:0}to{opacity:1}}
+.hs-card{width:min(360px,92vw);background:#FFF8EE;border:3px solid #594236;border-radius:20px;overflow:hidden;box-shadow:0 8px 0 rgba(89,66,54,.28)}
+.hs-pic{aspect-ratio:4/3;background:#2A2238;overflow:hidden}
+.hs-pic img{width:100%;height:100%;object-fit:cover;display:block}
+.hs-text{padding:14px 16px 6px;font-size:15px;font-weight:800;color:#594236;line-height:1.75;text-align:left}
+.hs-tap{padding:0 16px 12px;font-size:11px;font-weight:800;color:#9A8ABC;text-align:right}
+
 /* ---- こんぷりーとBOOK ---- */
 .zk-rate{margin:6px 0 4px;font-size:13px;font-weight:900;color:#594236}
 .zk-rate b{font-size:22px;color:#C98016}
@@ -525,6 +534,15 @@ body.cinema #adbar, body.cinema #mute{display:none}
   </div>
 </div>
 
+<!-- おうちに帰ったときの1枚絵（クリアと失敗で別の絵。ランダム） -->
+<div class="overlay hide" id="homeSceneView">
+  <div class="hs-card">
+    <div class="hs-pic"><img id="hsImg" alt=""></div>
+    <div class="hs-text" id="hsText"></div>
+    <div class="hs-tap">タップで とじる</div>
+  </div>
+</div>
+
 <div class="overlay hide" id="pauseView">
   <div class="card">
     <div class="r-label">ひとやすみ</div>
@@ -557,6 +575,10 @@ const PX_PER_M = 32;      // 32px = 1m
 const FLOOR_M = 50;       // 50mごとに1階層
 const GOAL_FLOOR = 25;    // 地下25階の奥がゴール（ゆま指定 9/17。どのステージもクリアできる）
 const GOAL_M = GOAL_FLOOR * FLOOR_M;
+/* 持ち帰るクリスタルの上乗せ（ゆま指定 9/17。数は仮で、あとで調整する）
+   距離＝1階ぶん進むごとに 💎2／クリア報酬＝💎50／ノーミス＆クリスタルぜんぶ＝さらに 💎50 */
+const DIST_GEM_PER_FLOOR = 2, CLEAR_GEM = 50, PERFECT_GEM = 50;
+const distGems = m => Math.floor(Math.min(m, GOAL_M) / FLOOR_M) * DIST_GEM_PER_FLOOR;
 const STEP = 1/120;       // 物理は固定刻みで回す（端末の速さで結果が変わらないように）
 
 // 横幅を480→360に狭めたぶん速さも0.8倍にし、先が見えてから届くまでの時間を保つ
@@ -1420,7 +1442,9 @@ function die(){
   const run = game.run, m = run.cam / PX_PER_M;
   const score = Math.floor(m) + game.bonus;
   // 拾ったクリスタルを持ち帰る（系統によっては多めに持てる）
-  const earned = Math.round(game.runGems * perk("gem") * famBonus());
+  const picked = Math.round(game.runGems * perk("gem") * famBonus());
+  const dist = distGems(m);
+  const earned = picked + dist;
   pet.gems += earned; pet.total += earned; savePet();
   game.lastDeath = m; store.set("poyon_lastdeath_m", m);   // つぎに来たとき、ここが目印になる
   game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m };
@@ -1442,7 +1466,7 @@ function die(){
     $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
     const gap = Math.floor(game.best - score);
     $("rGap").textContent = (!isNew && gap > 0 ? `ベストまで あと ${gap}` : "") + (game.revived ? "　（復活を使った）" : "");
-    $("rGems").innerHTML = `💎 ＋${earned}${earned > game.runGems ? `<span style="font-size:11px;color:#C98016">（${game.runGems}＋おまけ）</span>` : ""}　もちもの <b>${pet.gems}</b>`;
+    $("rGems").innerHTML = `💎 ＋${earned}<span style="font-size:11px;color:#C98016">（ひろった ${picked}${dist ? `＋きょり ${dist}` : ""}）</span>　もちもの <b>${pet.gems}</b>`;
     $("rGrow").classList.toggle("hide", !canEvolve());
     $("reviveBtn").classList.toggle("hide", game.revived);
     $("reviveBtn").textContent = noAds() ? "▶　復活する（広告なし）" : "▶　広告を見て復活";
@@ -1465,9 +1489,11 @@ function die(){
 function clearRun(){
   const run = game.run, m = GOAL_M;
   const score = m + game.bonus;
-  const earned = Math.round(game.runGems * perk("gem") * famBonus());
-  pet.gems += earned; pet.total += earned; savePet();
+  const picked = Math.round(game.runGems * perk("gem") * famBonus());
   const perfect = !game.revived && game.runGems >= run.gemTotal;
+  const dist = distGems(m), reward = CLEAR_GEM + (perfect ? PERFECT_GEM : 0);
+  const earned = picked + dist + reward;
+  pet.gems += earned; pet.total += earned; savePet();
   prog.clears++; if(perfect) prog.perfect = true; saveProg();
   game.lastDeath = 0; store.set("poyon_lastdeath_m", 0);
   game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m, clear: true, perfect };
@@ -1488,7 +1514,7 @@ function clearRun(){
                         : (isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "");
     $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
     $("rGap").textContent = perfect ? "" : `クリスタル ${game.runGems} / ${run.gemTotal}` + (game.revived ? "　（復活を使った）" : "");
-    $("rGems").innerHTML = `💎 ＋${earned}　もちもの <b>${pet.gems}</b>`;
+    $("rGems").innerHTML = `💎 ＋${earned}<span style="font-size:11px;color:#C98016">（ひろった ${picked}＋きょり ${dist}＋クリア ${reward}）</span>　もちもの <b>${pet.gems}</b>`;
     $("rGrow").classList.toggle("hide", !canEvolve());
     $("reviveBtn").classList.add("hide"); $("noadsBtn").classList.add("hide");
     $("resultView").classList.remove("hide");
@@ -1726,12 +1752,12 @@ const NV = { key: null, n: 1, i: 0, lines: [], typing: null, done: false, raf: 0
 
 /* 挿絵のファイル名。assets/story/{id}_a.jpg と _b.jpg
    第1章は共通（c1）。スライム s、けもの b、ヒトガタ h。救いの章は 0。
-   ヒトガタの章（2〜5・救い）は、育てた子に合わせて m / f の絵を使う */
+   ヒトガタの章（3〜5・救い）は、育てた子に合わせて m / f の絵を使う */
 function sceneId(key, n){
   if(n === 1) return "c1";
   if(key === "slime_hard") return n >= 1 && n <= 4 ? "s" + n : "sx" + n;
   const k = { slime: "s", beast: "b", human: "h" }[key];
-  const g = key === "human" && n !== 1 ? (pet.line === "human_m" ? "m" : "f") : "";   // ヒトガタは第2章から♂♀で絵が違う（♀はピンク）
+  const g = key === "human" && (n >= 3 || n === 0) ? (pet.line === "human_m" ? "m" : "f") : "";   // ヒトガタは第3章から♂♀で絵が違う（第2章は分かれる前の共通の姿）
   return k + n + g;
 }
 // 何文目から2枚目の絵に切り替えるか（書いていない章は半分のところ）
@@ -2236,9 +2262,40 @@ tapBtn("nameOk", () => {
     openStory(skey(pet.line), 1);
   }
 });
+/* おうちへ帰ったら、クリアか失敗かに合った1枚絵と短い一言をランダムで見せる（ゆま指定 9/17）。
+   絵は assets/home/clear_{1..3}.jpg と fail_{1..3}.jpg（Gemini製。どの姿の子でも合うよう、子そのものは描いていない） */
+const HOME_SCENE = {
+  clear: [
+    "地下25階から、{n}が胸を張って帰ってきた。今夜は ごちそうだ。",
+    "戸をあけたとたん、光る石が あふれた。{n}の大冒険、おつかれさま。",
+    "ゴールの宝箱の話を、{n}は 一晩じゅう 身ぶりで聞かせてくれた。",
+  ],
+  fail: [
+    "ちょっと転んで帰ってきた{n}。あたたかいミルクで、ひと休み。",
+    "{n}をタオルでくるんで、暖炉のそばへ。あしたは きっと、もっと深く。",
+    "まくらもとに、きょうの小さな光る石がひとつ。それで じゅうぶん。",
+  ],
+};
+function openHomeScene(){
+  const kind = game.lastRun && game.lastRun.clear ? "clear" : "fail";
+  const i = Math.floor(Math.random() * HOME_SCENE[kind].length);
+  game.ui = "homescene";
+  const img = $("hsImg");
+  img.onerror = () => { img.parentNode.style.display = "none"; };
+  img.parentNode.style.display = "";
+  img.src = `assets/home/${kind}_${i + 1}.jpg`;
+  $("hsText").textContent = HOME_SCENE[kind][i].replace(/\{n\}/g, pet.name);
+  $("homeSceneView").classList.remove("hide");
+}
+$("homeSceneView").addEventListener("pointerdown", e => {
+  e.stopPropagation(); e.preventDefault();
+  if(game.ui !== "homescene") return;
+  game.ui = null; $("homeSceneView").classList.add("hide");
+  if(Math.random() < 0.35) openTalk();   // そのあと、たまにその子がひとこと
+});
 tapBtn("rHome", () => {
   showTitle();
-  if(Math.random() < 0.55) openTalk();
+  openHomeScene();
 });
 
 /* はじめて開いたとき。名前をつけて、第1章を読んでから おうちに立つ。
