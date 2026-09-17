@@ -338,6 +338,11 @@ body.cinema #adbar, body.cinema #mute{display:none}
 }
 @keyframes pop{0%{transform:scale(.3)}100%{transform:scale(1)}}
 .r-gap{margin-top:8px;font-size:13px;color:var(--dim)}
+/* 結果画面はボタンが多いので、縦の短いスマホでも広告にもぐらないよう間を詰める */
+#resultView .tap{margin-top:12px}
+#resultView .r-best{margin-top:6px}
+#resultView .r-gap{margin-top:4px}
+@media (max-aspect-ratio: 3/4){ #resultView.overlay{padding-top:max(6vh, calc(env(safe-area-inset-top) + 56px));padding-bottom:calc(56px + 30px + env(safe-area-inset-bottom))} }
 
 .revive{
   pointer-events:auto;margin-top:14px;padding:14px 26px;border-radius:99px;
@@ -1479,7 +1484,7 @@ function die(){
     const gap = Math.floor(game.best - score);
     $("rGap").textContent = (!isNew && gap > 0 ? `ベストまで あと ${gap}` : "") + (game.revived ? "　（復活を使った）" : "");
     $("rGems").innerHTML = `💎 ＋${earned}<span style="font-size:11px;color:#C98016">（ひろった ${picked}${dist ? `＋きょり ${dist}` : ""}）</span>　もちもの <b>${pet.gems}</b>`;
-    $("rGrow").classList.toggle("hide", !canEvolve());
+    // 結果画面には「そだてられる」を出さない（ゆま 9/17）。おうちの「そだてる」の！で知らせる
     $("reviveBtn").classList.toggle("hide", game.revived);
     $("reviveBtn").textContent = noAds() ? "▶　復活する（広告なし）" : "▶　広告を見て復活";
     $("noadsBtn").classList.toggle("hide", game.revived || noAds());
@@ -1527,7 +1532,7 @@ function clearRun(){
     $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
     $("rGap").textContent = perfect ? "" : `クリスタル ${game.runGems} / ${run.gemTotal}` + (game.revived ? "　（復活を使った）" : "");
     $("rGems").innerHTML = `💎 ＋${earned}<span style="font-size:11px;color:#C98016">（ひろった ${picked}＋きょり ${dist}＋クリア ${reward}）</span>　もちもの <b>${pet.gems}</b>`;
-    $("rGrow").classList.toggle("hide", !canEvolve());
+    // 結果画面には「そだてられる」を出さない（ゆま 9/17）。おうちの「そだてる」の！で知らせる
     $("reviveBtn").classList.add("hide"); $("noadsBtn").classList.add("hide");
     $("resultView").classList.remove("hide");
     $("rHome").classList.add("hide");
