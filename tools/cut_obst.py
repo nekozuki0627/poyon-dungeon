@@ -29,7 +29,7 @@ while q:
         if 0 <= ny < h and 0 <= nx < w and not bg[ny, nx] and light[ny, nx]:
             bg[ny, nx] = True; q.append((ny, nx))
 # 絵の内側に閉じこめられた白いすき間（つるの間など）も、ある程度の大きさなら背景として抜く
-white = rgb.min(axis=2) > 238
+white = rgb.min(axis=2) > (238 if "keepwhite" not in sys.argv else 999)
 seen = bg.copy()
 for y0 in range(0, h, 2):
     for x0 in range(0, w, 2):

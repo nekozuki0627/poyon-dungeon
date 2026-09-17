@@ -2617,7 +2617,7 @@ function loadStageBg(k){
 }
 /* ステージごとの障害物（Gemini）。assets/stage_obj/{ステージ}_{spike1|spike3|hang|bat}.png
    まだ無いステージは、いつもの三角コーン・岩・コウモリのまま */
-const STAGE_OBJ = ["human_2", "slime_2", "slime_3", "slime_4", "slime_5", "beast_2", "beast_3", "beast_4", "beast_5"];
+const STAGE_OBJ = Object.keys(STAGE_BG);   // 12ステージぶん、ぜんぶそろった
 const stageObj = {};
 function curObj(){
   const k = game.mode === "title" ? null : stageKey();
@@ -2884,7 +2884,7 @@ function drawObstacles(run){
       const im = o.w >= 45 ? so.spike3 : so.spike1;
       // 横長の絵は低く、縦長の絵（とげ・たいまつなど）は少し高く描く
       const asp = im.naturalWidth / im.naturalHeight, wide = o.w >= 45;
-      const h = Math.max(wide ? 30 : 27, Math.min(wide ? 40 : 38, (o.w + 6) / asp)), w = h * asp;
+      const h = Math.max(wide ? 34 : 32, Math.min(wide ? 46 : 44, (o.w + 12) / asp)), w = h * asp;
       ctx.drawImage(im, x + o.w / 2 - w / 2, GY + 3 - h, w, h);
       continue;
     }
