@@ -2364,7 +2364,7 @@ function openStart(){
   $("stContinue").classList.toggle("hide", !has);
   $("stNew").textContent = has ? "さいしょから（育てなおす）" : "▶　はじめる";
   $("stNew").className = has ? "btn sub" : "btn go";
-  $("stNote").textContent = has ? `${pet.name}（${formName(pet)}）が 待っている` : "";
+  $("stNote").textContent = has ? `${pet.name}が 待っている` : "";
   $("startView").classList.remove("hide");
 }
 function leaveStart(){
