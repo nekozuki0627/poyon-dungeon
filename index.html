@@ -428,7 +428,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
   <button class="btn sub ready hide" id="rGrow" style="margin-top:12px">✨ そだてられる！</button>
   <button class="revive hide" id="reviveBtn">▶　広告を見て復活</button>
   <button class="btn sub hide" id="noadsBtn" style="margin-top:8px;font-size:12px;padding:7px 14px">復活の広告を消す（30日 ￥100）</button>
-  <div class="tap" id="rTap" style="visibility:hidden">タップでもう1回</div>
+  <div class="tap hide" id="rTap" style="visibility:hidden">タップでもう1回</div>
   <button class="btn sub hide" id="rHome" style="margin-top:10px;font-size:13px;padding:9px 18px">おうちへ もどる</button>
 </div>
 
@@ -1581,7 +1581,6 @@ function die(){
     if(isNew && game.prevBest > 0) SFX.rec();
     setTimeout(() => {
       if(game.mode !== "dead") return;
-      $("rTap").style.visibility = "visible";
       $("rHome").classList.remove("hide");
     }, 450);
   }, 650);
@@ -1626,7 +1625,6 @@ function clearRun(){
     $("rTap").style.visibility = "hidden";
     setTimeout(() => {
       if(game.mode !== "clear") return;
-      $("rTap").style.visibility = "visible";
       $("rHome").classList.remove("hide");
     }, 450);
   }, 900);
@@ -2281,8 +2279,7 @@ function onPress(e){
   }
   if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); musicStart(); return; }
   if(game.mode === "dead" || game.mode === "clear"){
-    // 結果が出てすぐのタップでは始めない（死んだ瞬間の連打で飛ばさないため）
-    if(game.time - game.deadAt > 1.1) start();
+    // 画面タップでのもう1回はなし（ゆま 9/17）。「おうちへ もどる」だけ
     return;
   }
   if(game.mode === "play") tryJump(game.run);
@@ -2620,7 +2617,7 @@ function loadStageBg(k){
 }
 /* ステージごとの障害物（Gemini）。assets/stage_obj/{ステージ}_{spike1|spike3|hang|bat}.png
    まだ無いステージは、いつもの三角コーン・岩・コウモリのまま */
-const STAGE_OBJ = ["human_2"];
+const STAGE_OBJ = ["human_2", "slime_2"];
 const stageObj = {};
 function curObj(){
   const k = game.mode === "title" ? null : stageKey();
@@ -2875,7 +2872,9 @@ function drawObstacles(run){
     if(o.k === "spike" && so && ready(so.spike1) && ready(so.spike3)){
       // ステージの障害物。当たり判定の箱の上に、高さをそろえて置く（横ははみ出してもよい）
       const im = o.w >= 45 ? so.spike3 : so.spike1;
-      const h = o.w >= 45 ? 30 : 27, w = h * im.naturalWidth / im.naturalHeight;
+      // 横長の絵は低く、縦長の絵（とげ・たいまつなど）は少し高く描く
+      const asp = im.naturalWidth / im.naturalHeight, wide = o.w >= 45;
+      const h = Math.max(wide ? 30 : 27, Math.min(wide ? 40 : 38, (o.w + 6) / asp)), w = h * asp;
       ctx.drawImage(im, x + o.w / 2 - w / 2, GY + 3 - h, w, h);
       continue;
     }

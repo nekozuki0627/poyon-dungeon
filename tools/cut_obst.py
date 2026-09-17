@@ -12,6 +12,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "
 os.makedirs(OUT, exist_ok=True)
 src, name = sys.argv[1], sys.argv[2]
 TH = int(sys.argv[3]) if len(sys.argv) > 3 else 190
+DIL = int(sys.argv[4]) if len(sys.argv) > 4 else 2
 rgb = np.array(Image.open(src).convert("RGB")).astype(int)
 h, w, _ = rgb.shape
 light = rgb.min(axis=2) > TH
@@ -28,19 +29,41 @@ while q:
         if 0 <= ny < h and 0 <= nx < w and not bg[ny, nx] and light[ny, nx]:
             bg[ny, nx] = True; q.append((ny, nx))
 fg = ~bg
-cols = fg.sum(axis=0)
-parts, start = [], None
-for x, c in enumerate(list(cols) + [0]):
-    if c > 2 and start is None: start = x
-    if c <= 2 and start is not None:
-        if x - start > 25: parts.append((start, x))
-        start = None
-print("parts", parts)
-assert len(parts) == 4, "4つに分かれなかった"
-alpha = np.where(fg, 255, 0).astype(np.uint8)
-img = np.dstack([rgb.astype(np.uint8), alpha])
-for (x0, x1), key in zip(parts, ["spike1", "spike3", "hang", "bat"]):
-    sub = Image.fromarray(img[:, x0:x1], "RGBA")
+# かたまりごとに分ける（縦に2つ重なっていても分けられるように）。
+# 小さく縮めた図で、近いかけら同士をつなげてからラベルを付ける
+S = 4
+sh, sw = h // S, w // S
+small = fg[:sh * S, :sw * S].reshape(sh, S, sw, S).any(axis=(1, 3))
+grow = small.copy()
+for _ in range(DIL):   # 少し太らせて、近いかけらをつなぐ
+    g2 = grow.copy()
+    g2[1:, :] |= grow[:-1, :]; g2[:-1, :] |= grow[1:, :]; g2[:, 1:] |= grow[:, :-1]; g2[:, :-1] |= grow[:, 1:]
+    grow = g2
+lab = np.zeros((sh, sw), int); n = 0; boxes = []
+for y in range(sh):
+    for x in range(sw):
+        if grow[y, x] and not lab[y, x]:
+            n += 1; q = deque([(y, x)]); lab[y, x] = n; ys = []; xs = []; cnt = 0
+            while q:
+                cy, cx = q.popleft(); ys.append(cy); xs.append(cx); cnt += small[cy, cx]
+                for ny, nx in ((cy+1, cx), (cy-1, cx), (cy, cx+1), (cy, cx-1)):
+                    if 0 <= ny < sh and 0 <= nx < sw and grow[ny, nx] and not lab[ny, nx]:
+                        lab[ny, nx] = n; q.append((ny, nx))
+            boxes.append((cnt, n, min(ys) * S, max(ys) * S + S, min(xs) * S, max(xs) * S + S))
+boxes.sort(reverse=True)
+big = boxes[:4]
+print("parts", [(b[2], b[3], b[4], b[5], b[0]) for b in big], "others", [b[0] for b in boxes[4:8]])
+assert len(big) == 4, "4つに分かれなかった"
+big.sort(key=lambda b: (b[4] + b[5]) / 2)
+# 並びは左から ①1個 ②3個 ③吊るすもの ④飛ぶもの。③④が縦に重なったときは、上にあるほうを③にする
+if abs((big[2][4] + big[2][5]) - (big[3][4] + big[3][5])) < 0.25 * (big[3][5] - big[3][4]) * 2 and big[2][2] > big[3][2]:
+    big[2], big[3] = big[3], big[2]
+labfull = np.kron(lab, np.ones((S, S), int))
+alpha_all = np.where(fg, 255, 0).astype(np.uint8)
+for b, key in zip(big, ["spike1", "spike3", "hang", "bat"]):
+    m = np.zeros((h, w), bool); m[:sh * S, :sw * S] = labfull == b[1]
+    a = np.where(m & fg, 255, 0).astype(np.uint8)
+    sub = Image.fromarray(np.dstack([rgb.astype(np.uint8), a]), "RGBA")
     sub = sub.crop(sub.getbbox())
     sub.save(os.path.join(OUT, f"{name}_{key}.png"))
     print(key, sub.size)
