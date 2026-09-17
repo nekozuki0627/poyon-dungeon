@@ -28,6 +28,20 @@ while q:
     for ny, nx in ((y+1, x), (y-1, x), (y, x+1), (y, x-1)):
         if 0 <= ny < h and 0 <= nx < w and not bg[ny, nx] and light[ny, nx]:
             bg[ny, nx] = True; q.append((ny, nx))
+# 絵の内側に閉じこめられた白いすき間（つるの間など）も、ある程度の大きさなら背景として抜く
+white = rgb.min(axis=2) > 238
+seen = bg.copy()
+for y0 in range(0, h, 2):
+    for x0 in range(0, w, 2):
+        if white[y0, x0] and not seen[y0, x0]:
+            q = deque([(y0, x0)]); seen[y0, x0] = True; pts = []
+            while q:
+                y, x = q.popleft(); pts.append((y, x))
+                for ny, nx in ((y+1, x), (y-1, x), (y, x+1), (y, x-1)):
+                    if 0 <= ny < h and 0 <= nx < w and not seen[ny, nx] and white[ny, nx]:
+                        seen[ny, nx] = True; q.append((ny, nx))
+            if len(pts) > 120:
+                for y, x in pts: bg[y, x] = True
 fg = ~bg
 # かたまりごとに分ける（縦に2つ重なっていても分けられるように）。
 # 小さく縮めた図で、近いかけら同士をつなげてからラベルを付ける
@@ -55,6 +69,8 @@ big = boxes[:4]
 print("parts", [(b[2], b[3], b[4], b[5], b[0]) for b in big], "others", [b[0] for b in boxes[4:8]])
 assert len(big) == 4, "4つに分かれなかった"
 big.sort(key=lambda b: (b[4] + b[5]) / 2)
+# 並びがちがうときは、左から数えた番号で並べかえを指定する（例 "0,2,1,3"）
+if len(sys.argv) > 5: big = [big[int(i)] for i in sys.argv[5].split(",")]
 # 並びは左から ①1個 ②3個 ③吊るすもの ④飛ぶもの。③④が縦に重なったときは、上にあるほうを③にする
 if abs((big[2][4] + big[2][5]) - (big[3][4] + big[3][5])) < 0.25 * (big[3][5] - big[3][4]) * 2 and big[2][2] > big[3][2]:
     big[2], big[3] = big[3], big[2]

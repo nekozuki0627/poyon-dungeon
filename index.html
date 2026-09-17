@@ -2617,7 +2617,7 @@ function loadStageBg(k){
 }
 /* ステージごとの障害物（Gemini）。assets/stage_obj/{ステージ}_{spike1|spike3|hang|bat}.png
    まだ無いステージは、いつもの三角コーン・岩・コウモリのまま */
-const STAGE_OBJ = ["human_2", "slime_2"];
+const STAGE_OBJ = ["human_2", "slime_2", "slime_3", "slime_4", "slime_5"];
 const stageObj = {};
 function curObj(){
   const k = game.mode === "title" ? null : stageKey();
@@ -2627,6 +2627,16 @@ function curObj(){
     for(const n of ["spike1", "spike3", "hang", "bat"]){
       const im = new Image(); im.src = `assets/stage_obj/${k}_${n}.png`; stageObj[k][n] = im;
     }
+    // 吊るすものの「上のはし」がどこにあるか（ひもをそこへつなぐ）
+    const hg = stageObj[k].hang;
+    hg.onload = () => {
+      const c = document.createElement("canvas"), cw = 100, ch = Math.max(4, Math.round(100 * hg.naturalHeight / hg.naturalWidth));
+      c.width = cw; c.height = ch; const g = c.getContext("2d"); g.drawImage(hg, 0, 0, cw, ch);
+      const d = g.getImageData(0, 0, cw, Math.max(2, Math.round(ch * .04))).data;
+      let l = -1, r = -1;
+      for(let i = 3; i < d.length; i += 4) if(d[i] > 128){ const x = ((i - 3) / 4) % cw; if(l < 0 || x < l) l = x; if(x > r) r = x; }
+      hg._ties = l < 0 ? [.15, .85] : (r - l < 12 ? [(l + r) / 200] : [(l + 3) / 100, (r - 3) / 100]);
+    };
     const fl = new Image(); fl.src = `assets/stage_obj/${k}_floor.jpg`; stageObj[k].floor = fl;
   }
   return stageObj[k];
@@ -2885,8 +2895,7 @@ function drawObstacles(run){
       // 天井から2本のひもで吊るす
       ctx.strokeStyle = COL.line; ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(x + w * .15 - 5, bandTop - 20); ctx.lineTo(x + w * .15 - 5, top + 6);
-      ctx.moveTo(x + w * .85 - 5, bandTop - 20); ctx.lineTo(x + w * .85 - 5, top + 6);
+      for(const tx of (so.hang._ties || [.15, .85])){ ctx.moveTo(x - 5 + w * tx, bandTop - 20); ctx.lineTo(x - 5 + w * tx, top + 4); }
       ctx.stroke();
       ctx.drawImage(so.hang, x - 5, top, w, h);
       ctx.fillStyle = "rgba(89,66,54,.16)"; ctx.fillRect(x, GY - 4, o.w, 4);
