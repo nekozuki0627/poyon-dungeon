@@ -119,7 +119,8 @@ html.wide #titleView .pettitle{color:#594236;text-shadow:0 1px 0 rgba(255,255,25
 #homeSceneView{pointer-events:auto;z-index:20;justify-content:center !important;padding-top:24px !important;background:rgba(40,28,60,.55);animation:hsIn .35s ease-out}
 @keyframes hsIn{from{opacity:0}to{opacity:1}}
 .hs-card{width:min(360px,92vw);background:#FFF8EE;border:3px solid #594236;border-radius:20px;overflow:hidden;box-shadow:0 8px 0 rgba(89,66,54,.28)}
-.hs-pic{aspect-ratio:4/3;background:#2A2238;overflow:hidden}
+.hs-pic{position:relative;aspect-ratio:4/3;background:#2A2238;overflow:hidden}
+#hsPet{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .hs-pic img{width:100%;height:100%;object-fit:cover;display:block}
 .hs-text{padding:14px 16px 6px;font-size:15px;font-weight:800;color:#594236;line-height:1.75;text-align:left}
 .hs-tap{padding:0 16px 12px;font-size:11px;font-weight:800;color:#9A8ABC;text-align:right}
@@ -540,7 +541,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
 <!-- おうちに帰ったときの1枚絵（クリアと失敗で別の絵。ランダム） -->
 <div class="overlay hide" id="homeSceneView">
   <div class="hs-card">
-    <div class="hs-pic"><img id="hsImg" alt=""></div>
+    <div class="hs-pic"><img id="hsImg" alt=""><canvas id="hsPet"></canvas></div>
     <div class="hs-text" id="hsText"></div>
     <div class="hs-tap">タップで とじる</div>
   </div>
@@ -2279,6 +2280,43 @@ const HOME_SCENE = {
     "まくらもとに、きょうの小さな光る石がひとつ。それで じゅうぶん。",
   ],
 };
+/* 絵のなかで、その子がいる場所（絵の幅・高さに対する割合）。
+   x＝まん中、y＝足もと、h＝大きさ、light＝その場の明るさ（夜は暗く、暖炉のそばは暖かく） */
+const HOME_SPOT = {
+  clear: [
+    { x: .27, y: .93, h: .19 },                          // ごちそうの机の手前、光る石のそば
+    { x: .47, y: .86, h: .18 },                          // あふれた光る石のまん中。手がこの子に伸びる
+    { x: .50, y: .85, h: .20 },                          // 暖炉の前のクッションの上
+  ],
+  fail: [
+    { x: .50, y: .92, h: .19 },                          // 戸口のマットの上（しずくの水たまり）
+    { x: .34, y: .87, h: .20, light: "sepia(.25) saturate(1.15)" },   // 暖炉のそばの毛布の上
+    { x: .62, y: .70, h: .18, light: "brightness(.72) saturate(.85)", sleep: true },  // 夜のベッドの上
+  ],
+};
+let hsSpot = null, hsRaf = 0;
+function drawHomePet(){
+  const cv = $("hsPet"), box = cv.parentNode.getBoundingClientRect();
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  if(cv.width !== Math.round(box.width * d)){ cv.width = Math.round(box.width * d); cv.height = Math.round(box.height * d); }
+  const g = cv.getContext("2d");
+  g.setTransform(d, 0, 0, d, 0, 0);
+  g.clearRect(0, 0, box.width, box.height);
+  if(hsSpot && $("hsImg").parentNode.style.display !== "none"){
+    const t = performance.now() / 1000;
+    const cx = box.width * hsSpot.x, by = box.height * hsSpot.y, h = box.height * hsSpot.h;
+    // 息をしているくらいの、ゆっくりした伸び縮み（寝ている子はもっとゆっくり）
+    const k = Math.sin(t * (hsSpot.sleep ? 1.6 : 2.6));
+    const sx = isHuman(pet) ? 1 : 1 + k * .025, sy = isHuman(pet) ? 1 + k * .01 : 1 - k * .025;
+    // 床に落ちる影
+    g.fillStyle = "rgba(60,36,28,.30)";
+    g.beginPath(); g.ellipse(cx, by, h * .62, h * .11, 0, 0, 7); g.fill();
+    g.filter = hsSpot.light || "none";
+    drawCreature(g, pet, cx, by + 2, h, { im: IMG.s1, sx, sy, t });
+    g.filter = "none";
+  }
+  if(game.ui === "homescene") hsRaf = requestAnimationFrame(drawHomePet);
+}
 function openHomeScene(){
   const kind = game.lastRun && game.lastRun.clear ? "clear" : "fail";
   const i = Math.floor(Math.random() * HOME_SCENE[kind].length);
@@ -2287,6 +2325,8 @@ function openHomeScene(){
   img.onerror = () => { img.parentNode.style.display = "none"; };
   img.parentNode.style.display = "";
   img.src = `assets/home/${kind}_${i + 1}.jpg`;
+  hsSpot = HOME_SPOT[kind][i];
+  cancelAnimationFrame(hsRaf); hsRaf = requestAnimationFrame(drawHomePet);
   $("hsText").textContent = HOME_SCENE[kind][i].replace(/\{n\}/g, pet.name);
   $("homeSceneView").classList.remove("hide");
 }
