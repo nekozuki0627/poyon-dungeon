@@ -3121,7 +3121,7 @@ function runFrame(P){
   if(key === "slime_hard_5" && !ready(IMG.run_slime_hard_5_0)) key = "slime_5";
   const fr = [0, 1, 2, 3].map(k => IMG[`run_${key}_${k}`]);
   if(!fr.every(ready)) return null;
-  const blob = pet.stage === 1 || pet.line === "slime" || pet.line === "slime_hard";
+  const blob = pet.stage === 1 || pet.line === "slime" || pet.line === "slime_hard" || key === "human_2";   // ヒトガタ第2段階は足がないので弾んで進む
   if(!P.onGround){
     const f = blob ? (P.vy < 0 ? fr[1] : fr[2]) : fr[1];
     f._blobLift = 0;
