@@ -363,7 +363,9 @@ body.cinema #adbar, body.cinema #mute{display:none}
   display:flex;align-items:center;justify-content:center;
   background:#EDE4FF;border-top:3px solid #594236;
   color:#9A8ABC;font-size:11px;font-weight:800;letter-spacing:.22em;
+  overflow:hidden;                     /* 本物の広告が入っても、帯より高くならないように */
 }
+#adbar ins.adsbygoogle{max-height:56px}
 #mute{
   position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:50%;
   border:2px solid #594236;background:rgba(255,255,255,.8);color:var(--ink);font-size:20px;
@@ -822,6 +824,51 @@ function stepRun(run, dt){
       const dx = wx - o.x, dy = P.y - by;
       if(dx*dx + dy*dy < (hr + 10) * (hr + 10)){ P.dead = "bat"; return; }
     }
+  }
+}
+
+/* =========================================================
+   広告（本物）の設定。ここに番号を入れるだけで本物の広告が出る。
+   空のままなら、これまでどおり仮の画面（灰色の「広告スペース」と5秒の待ち画面）。
+   ・client ＝ AdSense のサイト運営者ID「ca-pub-…」
+   ・banner ＝ 画面下の帯に出す広告ユニットの番号（AdSenseの「ディスプレイ広告」）
+   ・reward ＝ true なら、復活のときに H5ゲーム広告（リワード）を出す
+   ⚠️ AdSenseの審査が通ったサイト（自分のドメイン）でしか表示されない。
+      ローカル（localhost）やGitHub Pagesの github.io では出ないので、仮の画面のままになる。
+   ========================================================= */
+const AD = { client: "", banner: "", reward: false };
+let adReady = false;
+function adInit(){
+  if(!AD.client || adReady) return;
+  adReady = true;
+  const s = document.createElement("script");
+  s.async = true;
+  s.crossOrigin = "anonymous";
+  s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${AD.client}`;
+  if(AD.reward) s.setAttribute("data-ad-frequency-hint", "30s");
+  s.onerror = () => { adReady = false; };   // 広告ブロッカーなどで読めなくても、ゲームは普通に動く
+  document.head.appendChild(s);
+  if(AD.reward){
+    window.adsbygoogle = window.adsbygoogle || [];
+    window.adConfig = window.adConfig || function(o){ (window.adsbygoogle = window.adsbygoogle || []).push(o); };
+    window.adBreak  = window.adBreak  || function(o){ (window.adsbygoogle = window.adsbygoogle || []).push(o); };
+    adConfig({ preloadAdBreaks: "on", sound: "on", onReady: () => {} });
+  }
+  if(AD.banner){
+    // ⚠️ 「レスポンシブ」の広告にすると、AdSenseが親の高さを auto に書きかえて画面が崩れる。
+    //    320×50 の決まった大きさで、内側の箱に入れて出す
+    const bar = document.getElementById("adbar");
+    bar.innerHTML = "";
+    const box = document.createElement("div");
+    box.style.cssText = "width:320px;height:50px;overflow:hidden";
+    const ins = document.createElement("ins");
+    ins.className = "adsbygoogle";
+    ins.style.cssText = "display:inline-block;width:320px;height:50px";
+    ins.setAttribute("data-ad-client", AD.client);
+    ins.setAttribute("data-ad-slot", AD.banner);
+    box.appendChild(ins);
+    bar.appendChild(box);
+    (window.adsbygoogle = window.adsbygoogle || []).push({});
   }
 }
 
@@ -1643,6 +1690,24 @@ function openNoAds(){
    本物を入れるときは、この中で広告を出して、見終わったら done() を呼ぶだけでよい。
    アプリ版は AdMob のリワード広告、ブラウザ版は AdSense などを想定。 */
 function showRewardAd(done){
+  // 本物のリワード広告が使えるときは、そちらを出す（見なくても復活はさせる。見せられない日に遊べなくなるほうが困る）
+  if(AD.client && AD.reward && typeof window.adBreak === "function"){
+    let called = false;
+    const once = () => { if(!called){ called = true; clearTimeout(guard); done(); } };
+    // 広告が出てこない・返事が返らないときでも、8秒で復活させる（遊べなくなるほうが困る）
+    const guard = setTimeout(once, 8000);
+    try{
+      $("resultView").classList.add("hide");
+      window.adBreak({
+        type: "reward",
+        name: "revive",
+        beforeReward: show => show(),      // 「広告を見て復活する」の確認はゲーム側で済んでいる
+        adViewed: once,
+        adBreakDone: p => { if(p.breakStatus !== "viewed") once(); },
+      });
+      return;
+    }catch(e){ /* だめなら下の仮の画面へ */ }
+  }
   const v = $("adView");
   $("resultView").classList.add("hide");
   v.classList.remove("hide");
@@ -3723,6 +3788,7 @@ function frame(now){
 
 showTitle();
 openStart();
+adInit();
 requestAnimationFrame(frame);
 </script>
 </body>
