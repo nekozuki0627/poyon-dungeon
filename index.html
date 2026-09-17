@@ -1244,13 +1244,13 @@ function tone(f, d, type="triangle", v=.12, slide=0){
 const MUSIC = { on:false, next:0, i:0, timer:null, beats:[] };
 const SCALE = [0, 3, 5, 7, 10, 12, 10, 7];   // ペンタトニック
 
-let bus = null, echo = null, echoIn = null;
+let bus = null, echo = null, echoIn = null, echoFb = null;
 function ensureBus(){
   if(bus || !actx) return;
   bus = actx.createGain(); bus.gain.value = 0.85; bus.connect(actx.destination);
   // 短いこだま。これがないと音がぶつ切りで、走っている気持ちよさが出ない
   echo = actx.createDelay(0.8); echo.delayTime.value = 0.25;
-  const fb = actx.createGain(); fb.gain.value = 0.34;
+  const fb = actx.createGain(); fb.gain.value = 0.34; echoFb = fb;
   const wet = actx.createGain(); wet.gain.value = 0.34;
   echoIn = actx.createGain(); echoIn.gain.value = 1;
   echoIn.connect(echo); echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(bus);
@@ -1336,11 +1336,76 @@ const MELODY_B = [
   [21, -1, 24, -1, 28, -1, -1, -1],
 ];
 
+/* ステージごとの曲の味つけ（ゆま 9/17「ステージごとに音変えて」）。
+   テンポ（＝ジャンプの拍）は全部同じ。調・長調/短調・進行・楽器・ドラムを変えて、舞台に合う曲にする。
+   key＝移調（半音）、mode＝"major" | "minor" | "lydian"、lead＝メロディの音色、drum＝ドラムの型、amb＝環境音 */
+const MINOR_ROOTS = [0, 8, 3, 10], MINOR_CHORDS = [[0, 3, 7], [0, 3, 8], [3, 7, 10], [2, 5, 10]];   // Cm→A♭→E♭→B♭（和音は絶対の高さ）
+const SOUND = {
+  slime_2: { key: 2,  mode: "major",  lead: "bell",  drum: "soft",  echo: .45 },  // クリスタルの洞窟：きらきら
+  slime_3: { key: 5,  mode: "major",  lead: "pluck", drum: "pop",   echo: .25 },  // 昼の村：にぎやか
+  slime_4: { key: -3, mode: "minor",  lead: "tri",   drum: "soft",  echo: .4  },  // 夕暮れの村はずれ：さみしい
+  slime_5: { key: -2, mode: "minor",  lead: "flute", drum: "taiko", echo: .3  },  // 秋祭りの夜：太鼓と笛
+  beast_2: { key: -2, mode: "major",  lead: "flute", drum: "soft",  echo: .35 },  // 夕方の草原：のどか
+  beast_3: { key: 4,  mode: "lydian", lead: "bell",  drum: "soft",  echo: .5  },  // 月夜の花畑：ふしぎ
+  beast_4: { key: -5, mode: "minor",  lead: "tri",   drum: "soft",  echo: .5, amb: "wind" },  // 霧の森
+  beast_5: { key: 1,  mode: "minor",  lead: "bell",  drum: "march", echo: .45, amb: "wind" }, // 雪山：鈴と風
+  human_2: { key: 0,  mode: "major",  lead: "pluck", drum: "wood",  echo: .2  },  // 台所：コトコト
+  human_3: { key: -1, mode: "minor",  lead: "box",   drum: "wood",  echo: .5  },  // 夜の書庫：オルゴール
+  human_4: { key: 3,  mode: "major",  lead: "brass", drum: "march", echo: .25 },  // 石造りの街と学校：行進
+  human_5: { key: -4, mode: "minor",  lead: "tri",   drum: "soft",  echo: .45, amb: "rain" },  // 雨の回廊
+};
+function curSound(){
+  const k = (game.mode === "title" || !game.run) ? null : stageKey();
+  return (k && SOUND[k]) || null;
+}
+// ド基準のメロディを、短調・リディアンに読みかえる
+function modeNote(n, mode){
+  const pc = ((n % 12) + 12) % 12;
+  if(mode === "minor" && (pc === 4 || pc === 9 || pc === 11)) return n - 1;
+  if(mode === "lydian" && pc === 5) return n + 1;
+  return n;
+}
+function playLead(kind, f, t){
+  if(kind === "bell"){ at(f, t, 0.5, "sine", 0.09, { echo: true, attack: 0.003 }); at(f * 2.76, t, 0.18, "sine", 0.02, { echo: true, attack: 0.002 }); }
+  else if(kind === "pluck"){ at(f, t, 0.14, "square", 0.045, { attack: 0.003 }); at(f * 2, t, 0.08, "triangle", 0.03, { attack: 0.002 }); }
+  else if(kind === "flute"){ at(f, t, 0.3, "sine", 0.11, { echo: true, attack: 0.04 }); at(f * 2, t, 0.26, "sine", 0.012, { attack: 0.05 }); }
+  else if(kind === "box"){ at(f * 2, t, 0.34, "sine", 0.08, { echo: true, attack: 0.002 }); at(f * 4, t, 0.12, "sine", 0.018, { echo: true, attack: 0.002 }); }
+  else if(kind === "brass"){ at(f, t, 0.24, "sawtooth", 0.035, { attack: 0.03 }); at(f, t, 0.24, "triangle", 0.07, { attack: 0.02 }); }
+  else { at(f, t, 0.26, "triangle", 0.11, { echo: true, attack: 0.006 }); at(f * 2, t, 0.2, "sine", 0.035, { echo: true }); }
+}
+function playDrums(kind, k, bar, t){
+  if(kind === "soft"){
+    if(k === 0) at(58, t, 0.16, "sine", 0.22, { slide: 0.45 });
+    if(k === 4) noiseHit(t, 0.05, 3000, 0.08);
+    if(k % 2 === 0) noiseHit(t, 0.022, 8000, 0.03);
+  }else if(kind === "taiko"){
+    if(k === 0 || k === 3 || k === 6) at(k === 0 ? 70 : 95, t, 0.26, "sine", 0.3, { slide: 0.55 });
+    if(k === 4) noiseHit(t, 0.09, 2500, 0.05);
+    if(bar % 4 === 3 && k >= 5) at(110, t, 0.12, "sine", 0.18, { slide: 0.6 });
+  }else if(kind === "march"){
+    if(k === 0 || k === 4) at(62, t, 0.14, "sine", 0.24, { slide: 0.45 });
+    if(k === 4 || k === 6 || k === 7) noiseHit(t, 0.1, 1800, 0.09);
+    if(bar % 2 === 1 && k === 7) noiseHit(t + GRID / 2, 0.08, 1800, 0.07);
+  }else if(kind === "wood"){
+    if(k === 0 || k === 4) at(60, t, 0.14, "sine", 0.2, { slide: 0.5 });
+    if(k % 2 === 1) at(k === 3 || k === 7 ? 1180 : 880, t, 0.04, "sine", 0.07, { attack: 0.001 });
+    if(bar % 4 === 3 && k >= 6) at(1400, t + GRID / 2, 0.04, "sine", 0.05, { attack: 0.001 });
+  }else{
+    if(k === 0 || k === 4) at(58, t, 0.17, "sine", 0.3, { slide: 0.42 });
+    if(k === 4) noiseHit(t, 0.12, 1400, 0.16);
+    noiseHit(t, k % 2 ? 0.045 : 0.03, 7000, 0.035);
+    if(bar % 4 === 3 && k >= 6) noiseHit(t + GRID / 2, 0.1, 900, 0.1);
+  }
+}
+
 function playStep(i, t){
   const bar = Math.floor(i / 8) % BARS, k = i % 8;
+  const sd = curSound();
+  if(sd) return playStageStep(sd, i, t);
   const root = ROOTS[bar % 4];
   const m = game.run ? game.run.cam / PX_PER_M : 0;
   if(echo) echo.delayTime.value = GRID;
+  if(echoFb) echoFb.gain.value = 0.34;
 
   // ドラム
   if(k === 0 || k === 4) at(58, t, 0.17, "sine", 0.3, { slide: 0.42 });
@@ -1365,6 +1430,28 @@ function playStep(i, t){
     at(HZ(n + 12), t, 0.2, "sine", 0.035, { echo: true });
   }
   if(k === 0 && bar % 4 === 0) at(HZ(root + 24), t, 0.5, "sine", 0.03, { echo: true, attack: 0.05 });
+}
+function playStageStep(sd, i, t){
+  const bar = Math.floor(i / 8) % BARS, k = i % 8;
+  const m = game.run ? game.run.cam / PX_PER_M : 0;
+  const minor = sd.mode === "minor", K = sd.key;
+  if(echo) echo.delayTime.value = GRID;
+  if(echoFb) echoFb.gain.value = sd.echo || 0.34;
+  playDrums(sd.drum, k, bar, t);
+  // ベース
+  const root = (minor ? MINOR_ROOTS : ROOTS)[bar % 4] + K;
+  if(k === 0 || k === 3 || k === 6) at(HZ(root - 24), t, 0.22, "triangle", 0.15);
+  // コード
+  if(k % 2 === 1){
+    if(minor) for(const c of MINOR_CHORDS[bar % 4]) at(HZ(c + K + 12), t, 0.16, "triangle", 0.03, { attack: 0.004 });
+    else for(const c of CHORDS[bar % 4]) at(HZ(ROOTS[bar % 4] + c + K + 12), t, 0.16, "square", 0.02, { attack: 0.004 });
+  }
+  // メロディ
+  const n = (m > 260 ? MELODY_B : MELODY)[bar][k];
+  if(n >= 0) playLead(sd.lead, HZ(modeNote(n, sd.mode) + K), t);
+  // 環境音（風・雨）
+  if(sd.amb === "wind" && k === 0 && bar % 2 === 0) noiseHit(t, 0.035, 400, GRID * 8);
+  if(sd.amb === "rain") noiseHit(t, 0.018, 5000, GRID);
 }
 function musicStart(){
   if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; } }
