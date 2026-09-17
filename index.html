@@ -1518,11 +1518,11 @@ const NV = { key: null, n: 1, i: 0, lines: [], typing: null, done: false, raf: 0
 
 /* 挿絵のファイル名。assets/story/{id}_a.jpg と _b.jpg
    第1章は共通（c1）。スライム s、けもの b、ヒトガタ h。救いの章は 0。
-   ヒトガタの人の姿の章（4・5・救い）は、育てた子に合わせて m / f の絵を使う */
+   ヒトガタの章（2〜5・救い）は、育てた子に合わせて m / f の絵を使う */
 function sceneId(key, n){
   if(n === 1) return "c1";
   const k = { slime: "s", beast: "b", human: "h" }[key];
-  const g = key === "human" && (n >= 4 || n === 0) ? (pet.line === "human_m" ? "m" : "f") : "";
+  const g = key === "human" && n !== 1 ? (pet.line === "human_m" ? "m" : "f") : "";   // ヒトガタは第2章から♂♀で絵が違う（♀はピンク）
   return k + n + g;
 }
 // 何文目から2枚目の絵に切り替えるか（書いていない章は半分のところ）
@@ -2061,8 +2061,11 @@ loadImg("spike3", "obst_03.png");   // 三本並びのトゲ
 loadImg("hang",   "obst_02.png");   // 天井から下がる岩 loadImg("sign",     "prop_05.png"); loadImg("chest", "prop_06.png");
 // Geminiに描いてもらった 小屋の背景と、進化した姿（系統×第2〜5段階）
 loadImg("hut", "hut_bg.png");
-for(const l of ["slime", "beast", "human_m", "human_f"])
+for(let k = 0; k < 4; k++) loadImg(`run_slime_1_${k}`, `run/slime_1_${k}.png`);   // 第1段階（どの系統も同じ）
+for(const l of ["slime", "beast", "human_m", "human_f"]){
   for(let n = 2; n <= 5; n++) loadImg(`evo_${l}_${n}`, `evo_${l}_${n}.png`);
+  for(let n = 2; n <= 5; n++) for(let k = 0; k < 4; k++) loadImg(`run_${l}_${n}_${k}`, `run/${l}_${n}_${k}.png`);
+}
 const ready = im => im && im.complete && im.naturalWidth > 0;
 
 // 中心x・接地y・高さを指定して絵を置く
@@ -2620,6 +2623,24 @@ function drawCreature(g, f, cx, baseY, h, opt = {}){
   const sx = opt.sx != null ? opt.sx : 1, sy = opt.sy != null ? opt.sy : 1;
   // 第2段階からはGeminiの絵。横幅をぽよんに合わせて、背の高い姿は上限で止める
   const ev = f.stage >= 2 ? IMG[`evo_${f.line}_${f.stage}`] : null;
+  // 走っている姿（Geminiの横向き4コマ）。大きさは正面の絵と同じ高さにそろえる
+  if(opt.run && ready(opt.run)){
+    let hh;
+    if(ready(ev)){
+      const base = (ready(IMG.s1) ? IMG.s1.naturalWidth / IMG.s1.naturalHeight : 1.3) * h;
+      let w = base * SIZE_UP[f.stage - 1] * 1.12;
+      hh = w * ev.naturalHeight / ev.naturalWidth;
+      if(f.line.indexOf("human") === 0 && f.stage >= 3) hh = h * [0, 0, 0, 1.25, 1.55, 1.75][f.stage] * SIZE_UP[f.stage - 1];
+      const cap = h * (opt.cap || 1.9) * SIZE_UP[f.stage - 1];
+      if(hh > cap) hh = cap;
+      hh *= 1.08;   // 横向きは体が細く見えるので、ほんの少し大きく
+    }else{
+      hh = h * SIZE_UP[f.stage - 1] * 1.25;
+    }
+    const w = hh * opt.run.naturalWidth / opt.run.naturalHeight;
+    g.drawImage(opt.run, cx - w * 0.45, baseY - hh, w, hh);
+    return;
+  }
   if(ready(ev)){
     const base = (ready(IMG.s1) ? IMG.s1.naturalWidth / IMG.s1.naturalHeight : 1.3) * h;
     let w = base * SIZE_UP[f.stage - 1] * 1.12;
@@ -2677,6 +2698,25 @@ function slimePose(P){
   return game.squashT > 0 ? IMG.s7 : IMG.s1;   // s2は足が生えているので使わない
 }
 const POSE_H = { s1:40, s3:54, s4:40, s5:44, s7:26, s9:38 };
+// 横向きに走る4コマ（assets/run/{系統}_{段階}_{0〜3}.png、第1段階は slime_1）。そろっていなければ null
+function runFrame(P){
+  if(game.mode !== "play") return null;
+  const key = pet.stage === 1 ? "slime_1" : `${pet.line}_${pet.stage}`;
+  const fr = [0, 1, 2, 3].map(k => IMG[`run_${key}_${k}`]);
+  if(!fr.every(ready)) return null;
+  const blob = pet.stage === 1 || pet.line === "slime";
+  if(!P.onGround){
+    const f = blob ? (P.vy < 0 ? fr[1] : fr[2]) : fr[1];
+    f._blobLift = 0;
+    return f;
+  }
+  if(blob && game.squashT > 0) return fr[3];
+  // 速さに合わせて足の回転を上げる（潜るほど速くなる）
+  const rate = (blob ? 7 : 9) + Math.min(5, (game.run ? game.run.cam : 0) / 4000);
+  const i = Math.floor(game.time * rate) % 4;
+  fr[i]._blobLift = blob ? [0, 5, 9, 0][i] : 0;
+  return fr[i];
+}
 
 function drawSlime(run){
   const P = run.P;
@@ -2701,6 +2741,14 @@ function drawSlime(run){
   }
 
   if(run.inv > 0 && Math.floor(game.time * 12) % 2 === 0) return;   // 無敵の間は点滅
+  const rf = runFrame(P);
+  if(rf){
+    // 走る絵があるときは、それを使う（地面では4コマを回し、跳んでいる間は跳ねたコマ）。
+    // スライム形は地面でも「ぽよん」と弾んで見えるよう、跳ねるコマだけ少し浮かせる（当たり判定は動かさない）
+    const lift = (P.onGround && rf._blobLift) ? rf._blobLift : 0;
+    drawCreature(ctx, pet, x, baseY + 3 - lift, 40, { run: rf });
+    return;
+  }
   const im = slimePose(P);
   const key = Object.keys(IMG).find(k => IMG[k] === im);
   if(pet.stage >= 2 && ready(IMG[`evo_${pet.line}_${pet.stage}`])){
