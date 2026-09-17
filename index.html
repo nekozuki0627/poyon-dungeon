@@ -53,11 +53,11 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
    こうしないと、なまえの札がスライムに重なってしまう */
 .home-bottom{
   /* 地面の線ぴったりだと、寝床や積んだクリスタルに名前の札が乗ってしまう。少し下げる */
-  position:fixed;left:0;right:0;bottom:0;
-  /* 縦が短いスマホでは、ボタンが広告の下にもぐらないよう、上に寄せる（下からボタンぶんの高さは必ず残す） */
-  top:min(calc(var(--ground,60%) + 44px), calc(100% - 56px - env(safe-area-inset-bottom) - 196px));
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  padding:6px 16px calc(56px + env(safe-area-inset-bottom));
+  position:fixed;left:0;right:0;bottom:0;top:calc(var(--ground,60%) + 44px);
+  /* 下からそろえる。縦が短いスマホでも、はみ出すのは上側だけ＝ボタンが広告の下にもぐらない。
+     広告との間にはゆとりを残す */
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
+  padding:6px 16px calc(56px + 26px + env(safe-area-inset-bottom));
 }
 .petname{
   pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
