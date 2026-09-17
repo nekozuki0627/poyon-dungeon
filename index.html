@@ -2391,11 +2391,39 @@ const HOME_SPOT = {
     { x: .62, y: .70, h: .18, light: "brightness(.72) saturate(.85)", sleep: true },  // 夜のベッドの上
   ],
 };
+/* 第3段階からは、その子の姿に合った専用の絵（ゆま指定 9/17。小さい子向けのミルクやタオルだと、大きくなった子に合わない）。
+   絵は assets/home/{系統}_{段階}_clear.jpg と _fail.jpg（Gemini製・縦長）。ヒトガタは♂♀で同じ部屋。むずかしいはスライムと同じ */
+const HOME_EVO = {
+  slime_3: { clear: ["戸口より大きくなった{n}。庭いっぱいの光る石を、夕日のなかで自慢してくれた。", { x: .45, y: .70, h: .20 }],
+             fail:  ["雨の軒下に、いちばん大きな毛布を広げた。{n}は、ぷるんと二回ふるえて丸くなった。", { x: .45, y: .76, h: .20, light: "brightness(.85)" }] },
+  slime_4: { clear: ["庭の木に灯りをともして、{n}とふたりで夜のピクニック。光る石は、ごちそうのとなりに。", { x: .45, y: .78, h: .20, light: "brightness(.9)" }],
+             fail:  ["朝もやの庭で、{n}の体をていねいに拭いた。きょうは、ゆっくり休もう。", { x: .62, y: .68, h: .17, light: "saturate(.85) brightness(1.05)" }] },
+  slime_5: { clear: ["庭の木の下に、{n}だけの玉座をこしらえた。王冠が、星あかりにきらりと光る。", { x: .50, y: .64, h: .19, light: "brightness(.9)" }],
+             fail:  ["キルトの上で、{n}はあたたかいスープを待っている。王冠は、そっと横に置いた。", { x: .52, y: .72, h: .20, light: "brightness(.85)" }] },
+  beast_3: { clear: ["暖炉の前に、骨つき肉のごちそう。{n}のしっぽが、ずっと止まらない。", { x: .40, y: .88, h: .20 }],
+             fail:  ["泥の足あとをたどると、玄関に{n}。ぬるま湯で、ひとつずつ足を洗った。", { x: .45, y: .88, h: .20 }] },
+  beast_4: { clear: ["森のはずれの切り株に、光る石と木の実がどっさり。{n}が、鼻を高くして待っていた。", { x: .62, y: .72, h: .19 }],
+             fail:  ["暖炉のそばで、{n}の前足に包帯を巻いた。牙をむかずに、じっとしていてくれた。", { x: .45, y: .86, h: .20, light: "sepia(.2)" }] },
+  beast_5: { clear: ["満月の丘の上。{n}は積みあげた光る石の前で、ひと声だけ誇らしげに吠えた。", { x: .50, y: .80, h: .21, light: "brightness(.78) saturate(.9)" }],
+             fail:  ["干し草の納屋で、{n}は大きな体を丸めた。毛布を一枚、そっと背中にかけた。", { x: .50, y: .86, h: .21, light: "brightness(.82)" }] },
+  human_3: { clear: ["{n}が、絵本を読んでほしそうに待っていた。ごほうびのケーキは、半分こ。", { x: .55, y: .97, h: .20 }],
+             fail:  ["雨の音を聞きながら、窓辺でココア。{n}が、読みかけの本をひらいて見せてくれた。", { x: .50, y: .98, h: .20 }] },
+  human_4: { clear: ["はなまるの答案を、{n}が少し照れながら見せてくれた。今夜は、小さなお祝いだ。", { x: .45, y: .97, h: .17 }],
+             fail:  ["ぬれた傘を立てかけて、{n}がタオルで髪をふいている。あたたかいお茶をいれよう。", { x: .55, y: .93, h: .17 }] },
+  human_5: { clear: ["星のバルコニーで、{n}に花束を渡した。流れ星がひとつ、夜空を横切った。", { x: .30, y: .92, h: .16, light: "brightness(.85)" }],
+             fail:  ["書斎のランプの下で、{n}は上着を椅子にかけた。きょうの話は、紅茶を飲みながら。", { x: .62, y: .94, h: .16 }] },
+};
+function homeEvoKey(f){
+  if(f.stage < 3) return null;
+  const l = f.line === "slime_hard" ? "slime" : f.line.indexOf("human") === 0 ? "human" : f.line;
+  const k = `${l}_${f.stage}`;
+  return HOME_EVO[k] ? k : null;
+}
 let hsSpot = null, hsRaf = 0;
 function drawHomePet(){
   const cv = $("hsPet"), box = cv.parentNode.getBoundingClientRect();
   const d = Math.min(2, window.devicePixelRatio || 1);
-  if(cv.width !== Math.round(box.width * d)){ cv.width = Math.round(box.width * d); cv.height = Math.round(box.height * d); }
+  if(cv.width !== Math.round(box.width * d) || cv.height !== Math.round(box.height * d)){ cv.width = Math.round(box.width * d); cv.height = Math.round(box.height * d); }
   const g = cv.getContext("2d");
   g.setTransform(d, 0, 0, d, 0, 0);
   g.clearRect(0, 0, box.width, box.height);
@@ -2416,15 +2444,27 @@ function drawHomePet(){
 }
 function openHomeScene(){
   const kind = game.lastRun && game.lastRun.clear ? "clear" : "fail";
-  const i = Math.floor(Math.random() * HOME_SCENE[kind].length);
   game.ui = "homescene";
-  const img = $("hsImg");
-  img.onerror = () => { img.parentNode.style.display = "none"; };
-  img.parentNode.style.display = "";
-  img.src = `assets/home/${kind}_${i + 1}.jpg`;
-  hsSpot = HOME_SPOT[kind][i];
+  const img = $("hsImg"), pic = img.parentNode;
+  const ek = homeEvoKey(pet);
+  let text;
+  img.onerror = () => { pic.style.display = "none"; };
+  // 絵の縦横比に合わせて枠を変える（第1〜2段階は横長、第3段階からは縦長）
+  img.onload = () => { if(img.naturalWidth) pic.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`; };
+  pic.style.display = "";
+  if(ek){
+    const [t, spot] = HOME_EVO[ek][kind];
+    pic.style.aspectRatio = "500 / 566";
+    img.src = `assets/home/${ek}_${kind}.jpg`;
+    hsSpot = spot; text = t;
+  }else{
+    const i = Math.floor(Math.random() * HOME_SCENE[kind].length);
+    pic.style.aspectRatio = "4 / 3";
+    img.src = `assets/home/${kind}_${i + 1}.jpg`;
+    hsSpot = HOME_SPOT[kind][i]; text = HOME_SCENE[kind][i];
+  }
   cancelAnimationFrame(hsRaf); hsRaf = requestAnimationFrame(drawHomePet);
-  $("hsText").textContent = HOME_SCENE[kind][i].replace(/\{n\}/g, pet.name);
+  $("hsText").textContent = text.replace(/\{n\}/g, pet.name);
   $("homeSceneView").classList.remove("hide");
 }
 $("homeSceneView").addEventListener("pointerdown", e => {
