@@ -681,7 +681,7 @@ function makeRun(opt = {}){
   return {
     cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
     goalX: opt.goal ? GOAL_M * PX_PER_M + PX : 0, cleared: false, gemTotal: 0,
-    gems: [], magnet: opt.magnet ?? 0,
+    gems: [], gid: 0, gotQ: [], magnet: opt.magnet ?? 0,
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
     ev: [],   // 画面側に伝える出来事（着地・ジャンプなど）
@@ -711,7 +711,11 @@ function placeChunk(run, chunk, x0, t0){
     }else if(it.k === "ceil"){
       run.obs.push({k:"ceil", x, w:it.w}); end = x + it.w;
     }else if(it.k === "batLow" || it.k === "batHigh"){
-      run.obs.push({k:"bat", x, y:SIZE[it.k].y}); end = x + 12;
+      // コウモリは止まっていず、前から飛んでくる。速さは1ぴきずつちがい、飛びながらも速くなったり遅くなったりする（ゆま 9/18）
+      run.obs.push({k:"bat", x, y:SIZE[it.k].y, bx:x,
+                    vb: 20 + Math.random() * 50, wa: 0, ww: 1.5 + Math.random() * 2.5});
+      { const b = run.obs[run.obs.length - 1]; b.wa = b.vb * (0.3 + Math.random() * 0.4); }
+      end = x + 12;
     }else{
       const s = SIZE[it.k];
       run.obs.push({k:"spike", x, w:s.w, h:s.h}); end = x + s.w;
@@ -742,10 +746,14 @@ function generate(run){
     const r = Math.random();
     if(r < 0.60){
       const mid = (run.nextX + end) / 2;
-      for(let i = -1; i <= 1; i++) run.gems.push({ x: mid + i * 26, y: i === 0 ? -86 : -64, got: false });
+      // 天井の岩の下に山なりで置くと、跳べば岩に当たるので絶対に取れない（ゆま指摘 9/18）。
+      // 岩の下では「跳ばずにくぐる」道すじ＝地面すれすれに一列に並べる
+      const underCeil = run.obs.some(o => o.k === "ceil" && o.x - 40 < mid + 26 && o.x + o.w + 40 > mid - 26);
+      const gid = ++run.gid;
+      for(let i = -1; i <= 1; i++) run.gems.push({ x: mid + i * 26, y: underCeil ? -R - 6 : i === 0 ? -86 : -64, got: false, gid, set: 3 });
       run.gemTotal += 3;
     }else if(r < 0.80){
-      run.gems.push({ x: end + 46, y: -R - 10, got: false });
+      run.gems.push({ x: end + 46, y: -R - 10, got: false, gid: ++run.gid, set: 1 });
       run.gemTotal += 1;
     }
     run.nextX = advanceBy(end, snapped - tEnd);
@@ -768,6 +776,19 @@ function tryJump(run){
   }
   if(P.jumps < 2){ P.vy = -JV2; P.jumps = 2; run.ev.push("jump2"); return 2; }
   return 0;
+}
+
+/* 飛んでくるコウモリの今の位置。
+   「スライムがもともとの置き場所 o.x に着く瞬間に、コウモリもちょうど o.x にいる」ように動かす。
+   T＝スライムが o.x に着くまでの残り時間。その間にコウモリが飛ぶ距離を足す（T=0 で必ず o.x）。
+   だから当たる瞬間の位置と高さは、検証ずみの止まったコウモリと同じ。近づく速さだけが変わる */
+function batX(run, o, wx){
+  if(!o.vb) return o.x;
+  if(wx >= o.x) return o.x - o.vb * (wx - o.x) / Math.max(1, run.v);   // 通りすぎたあとは、そのまま後ろへ
+  if(o.x - wx > W + 500) return o.x + o.vb * 6;                            // まだ遠い（画面の外）
+  const T = travelTime(wx, o.x);
+  // 飛ぶ速さ＝ vb ＋ wa・sin(ww・T)。wa < vb なので、いつも前から後ろへ進む（逆もどりしない）
+  return o.x + o.vb * T + (o.wa / o.ww) * (1 - Math.cos(o.ww * T));
 }
 
 function circleRect(cx, cy, r, x0, y0, x1, y1){
@@ -808,10 +829,11 @@ function stepRun(run, dt){
   for(const q of run.gems){
     if(q.got || Math.abs(q.x - wx) > pr + 40) continue;
     const dx = q.x - wx, dy = q.y - P.y;
-    if(dx * dx + dy * dy < pr * pr){ q.got = true; run.ev.push("gem"); }
+    if(dx * dx + dy * dy < pr * pr){ q.got = true; run.ev.push("gem"); run.gotQ.push(q); }
   }
 
   const hr = R * 0.78;   // 当たり判定は見た目より少し小さく（理不尽に感じさせない）
+  for(const o of run.obs) if(o.k === "bat") o.bx = batX(run, o, wx);
   if(safe) return;
   for(const o of run.obs){
     if(o.x > wx + 60 || (o.x + (o.w || 12)) < wx - 60) continue;
@@ -821,7 +843,7 @@ function stepRun(run, dt){
       if(circleRect(wx, P.y, hr, o.x, CEIL - 50, o.x + o.w, CEIL_BOTTOM)){ P.dead = "ceil"; return; }
     }else if(o.k === "bat"){
       const by = o.y + Math.sin(o.x * 0.05) * 6;
-      const dx = wx - o.x, dy = P.y - by;
+      const dx = wx - o.bx, dy = P.y - by;
       if(dx*dx + dy*dy < (hr + 10) * (hr + 10)){ P.dead = "bat"; return; }
     }
   }
@@ -936,8 +958,8 @@ const LINE_INFO = {
   },
   // ヒトガタは第2段階までは1つの姿。第3段階でオス・メスに分かれる（ゆま指定 9/17）
   human: {
-    label: "ヒトガタ", acc: "#B9A7FF", perk: "rhythm", story: "human",
-    desc: "リズムの ボーナスが ふえる",
+    label: "ヒトガタ", acc: "#B9A7FF", perk: "combo", story: "human",
+    desc: "コンボの ボーナスが ふえる",
     body:  ["#42E6E0", "#D6DDF5", "#C9CFF0", "#BCC2EC", "#AFB5E8"],
     names: ["ぽよん", "てのあるヒトガタ", "ヒトガタ", "ヒトガタ", "ヒトガタ"],
   },
@@ -950,14 +972,14 @@ const LINE_INFO = {
     names: ["ぽよん", "つやぽよ", "きらめきゼリー", "だいおうスライム", "しんえんの スライム"],
   },
   human_m: {
-    label: "ヒトガタ♂", acc: "#7FB3FF", perk: "rhythm", story: "human",
-    desc: "リズムの ボーナスが ふえる",
+    label: "ヒトガタ♂", acc: "#7FB3FF", perk: "combo", story: "human",
+    desc: "コンボの ボーナスが ふえる",
     body:  ["#42E6E0", "#BEE0FF", "#9CCBFF", "#7FB3FF", "#6E93F2"],
     names: ["ぽよん", "てのあるヒトガタ", "ことばのヒトガタ", "まなびのヒトガタ", "ヒトガタの青年"],
   },
   human_f: {
-    label: "ヒトガタ♀", acc: "#FF9FC8", perk: "rhythm", story: "human",
-    desc: "リズムの ボーナスが ふえる",
+    label: "ヒトガタ♀", acc: "#FF9FC8", perk: "combo", story: "human",
+    desc: "コンボの ボーナスが ふえる",
     body:  ["#42E6E0", "#FFC6E2", "#FFA8D3", "#EE86C6", "#D98BE8"],
     names: ["ぽよん", "てのあるヒトガタ", "ことばのヒトガタ", "まなびのヒトガタ", "ヒトガタの乙女"],
   },
@@ -1225,7 +1247,13 @@ const family = store.get("poyon_family", []);
 /* やりこみの記録
    done＝その道を第5段階まで育てた／perfect＝地下25階をノーミス・クリスタルぜんぶでクリアした／
    seen＝図鑑用。出会った姿（"系統_段階"）／clears＝ゴールした回数 */
-const prog = Object.assign({ done: {}, perfect: false, seen: {}, clears: 0 }, store.get("poyon_prog", {}));
+const prog = Object.assign({ done: {}, perfect: false, seen: {}, clears: 0, played: {} }, store.get("poyon_prog", {}));
+if(!prog.played) prog.played = {};
+/* 進化するには、いまの姿でダンジョンを1回は遊んでいること（ゆま 9/18）。
+   クリアしたかどうかは関係ない（むずかしいだけは別の条件がある） */
+const formKey = () => `${pet.line}_${pet.stage}`;
+const playedNow = () => !!prog.played[formKey()];
+function markPlayed(){ if(!prog.played[formKey()]){ prog.played[formKey()] = true; saveProg(); } }
 function saveProg(){ store.set("poyon_prog", prog); }
 function markSeen(line, stage){
   for(let n = 1; n <= stage; n++){
@@ -1254,18 +1282,18 @@ function perk(kind){
   const n = pet.stage - 1;
   if(info.perk !== kind || n <= 0) return kind === "magnet" ? 0 : 1;
   if(kind === "gem")    return 1 + 0.20 * n;
-  if(kind === "rhythm") return 1 + 0.30 * n;
+  if(kind === "combo") return 1 + 0.30 * n;
   if(kind === "magnet") return 16 * n;
   return 1;
 }
 const isHuman = f => f.line.indexOf("human") === 0 && f.stage >= 4;   // 人の姿。跳ねたり潰れたりしない
-const canEvolve = () => pet.stage < 5 && pet.gems >= EVO_COST[pet.stage + 1];
+const canEvolve = () => pet.stage < 5 && pet.gems >= EVO_COST[pet.stage + 1] && playedNow();
 
 const game = {
   mode: "title", run: null, best: store.get("poyon_best_m", 0), prevBest: 0,
   ui: null, runGems: 0, evoT: 0, petHappy: 0,
   time: 0, parts: [], pops: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
-  combo: 0, bestCombo: 0, bonus: 0, revived: false, bestDist: store.get("poyon_bestdist_m", 0),
+  combo: 0, bestCombo: 0, bonus: 0, perfects: 0, gsets: {}, revived: false, bestDist: store.get("poyon_bestdist_m", 0),
   lastDeath: store.get("poyon_lastdeath_m", 0), passedDeath: false,
   muted: store.get("poyon_muted", false),
 };
@@ -1387,19 +1415,26 @@ const MELODY_B = [
    テンポ（＝ジャンプの拍）は全部同じ。調・長調/短調・進行・楽器・ドラムを変えて、舞台に合う曲にする。
    key＝移調（半音）、mode＝"major" | "minor" | "lydian"、lead＝メロディの音色、drum＝ドラムの型、amb＝環境音 */
 const MINOR_ROOTS = [0, 8, 3, 10], MINOR_CHORDS = [[0, 3, 7], [0, 3, 8], [3, 7, 10], [2, 5, 10]];   // Cm→A♭→E♭→B♭（和音は絶対の高さ）
+/* ステージごとの曲（ゆま 9/18：「違いが分からない。もっと分かりやすく、ファンタジー系などいろいろに」）。
+   拍（1拍＝BEAT）は全ステージ同じ。障害物は拍の目に置いてあるので、拍そのものは変えない。
+   そのかわり「のり」を変えて、速く・遅く聞こえるようにする：
+     feel: half＝半分のテンポに聞こえる（ゆったり）／normal／double＝16分で刻んで速く聞こえる／six＝3つずつの跳ねるのり（ジグ・祭り）
+     pat : main＝いつもの旋律／arp＝和音のアルペジオ（きらきら）／sparse＝長い音だけ（しっとり）／jig＝速い音階の踊り
+     pad : 和音をのばして鳴らす（空気感）
+     scale: yo＝日本の祭りの音階（ド・レ・ファ・ソ・ラ） */
 const SOUND = {
-  slime_2: { key: 2,  mode: "major",  lead: "bell",  drum: "soft",  echo: .45 },  // クリスタルの洞窟：きらきら
-  slime_3: { key: 5,  mode: "major",  lead: "pluck", drum: "pop",   echo: .25 },  // 昼の村：にぎやか
-  slime_4: { key: -3, mode: "minor",  lead: "tri",   drum: "soft",  echo: .4  },  // 夕暮れの村はずれ：さみしい
-  slime_5: { key: -2, mode: "minor",  lead: "flute", drum: "taiko", echo: .3  },  // 秋祭りの夜：太鼓と笛
-  beast_2: { key: -2, mode: "major",  lead: "flute", drum: "soft",  echo: .35 },  // 夕方の草原：のどか
-  beast_3: { key: 4,  mode: "lydian", lead: "bell",  drum: "soft",  echo: .5  },  // 月夜の花畑：ふしぎ
-  beast_4: { key: -5, mode: "minor",  lead: "tri",   drum: "soft",  echo: .5, amb: "wind" },  // 霧の森
-  beast_5: { key: 1,  mode: "minor",  lead: "bell",  drum: "march", echo: .45, amb: "wind" }, // 雪山：鈴と風
-  human_2: { key: 0,  mode: "major",  lead: "pluck", drum: "wood",  echo: .2  },  // 台所：コトコト
-  human_3: { key: -1, mode: "minor",  lead: "box",   drum: "wood",  echo: .5  },  // 夜の書庫：オルゴール
-  human_4: { key: 3,  mode: "major",  lead: "brass", drum: "march", echo: .25 },  // 石造りの街と学校：行進
-  human_5: { key: -4, mode: "minor",  lead: "tri",   drum: "soft",  echo: .45, amb: "rain" },  // 雨の回廊
+  slime_2: { key: 2,  mode: "major",  lead: "bell",  drum: "soft",   echo: .5,  feel: "half",   pat: "arp",    pad: true },   // クリスタルの洞窟：オルゴールのようなきらきら
+  slime_3: { key: 5,  mode: "major",  lead: "pluck", drum: "pop",    echo: .2,  feel: "double", pat: "main" },                 // 昼の村：にぎやかで速い
+  slime_4: { key: -3, mode: "minor",  lead: "tri",   drum: "soft",   echo: .45, feel: "half",   pat: "sparse", pad: true },   // 夕暮れの村はずれ：さみしい
+  slime_5: { key: -2, mode: "major",  lead: "flute", drum: "taiko",  echo: .3,  feel: "six",    pat: "jig",    scale: "yo" }, // 秋祭りの夜：太鼓と笛の祭りばやし
+  beast_2: { key: -2, mode: "major",  lead: "flute", drum: "bodh",   echo: .3,  feel: "six",    pat: "jig" },                  // 夕方の草原：ケルトの踊り
+  beast_3: { key: 4,  mode: "lydian", lead: "bell",  drum: "none",   echo: .55, feel: "half",   pat: "arp",    pad: true },   // 月夜の花畑：妖精の森
+  beast_4: { key: -5, mode: "minor",  lead: "tri",   drum: "soft",   echo: .5,  feel: "half",   pat: "sparse", pad: true, amb: "wind" }, // 霧の森：不穏
+  beast_5: { key: 1,  mode: "minor",  lead: "bell",  drum: "sleigh", echo: .4,  feel: "double", pat: "arp",    amb: "wind" }, // 雪山：鈴が鳴りつづける
+  human_2: { key: 0,  mode: "major",  lead: "pluck", drum: "wood",   echo: .15, feel: "double", pat: "main" },                 // 台所：コトコト忙しい
+  human_3: { key: -1, mode: "minor",  lead: "box",   drum: "none",   echo: .55, feel: "half",   pat: "arp",    pad: true },   // 夜の書庫：オルゴール
+  human_4: { key: 3,  mode: "major",  lead: "brass", drum: "march",  echo: .2,  feel: "normal", pat: "main" },                 // 石造りの街と学校：行進
+  human_5: { key: -4, mode: "minor",  lead: "tri",   drum: "soft",   echo: .5,  feel: "half",   pat: "sparse", pad: true, amb: "rain" }, // 雨の回廊
 };
 function curSound(){
   const k = (game.mode === "title" || !game.run) ? null : stageKey();
@@ -1412,15 +1447,33 @@ function modeNote(n, mode){
   if(mode === "lydian" && pc === 5) return n + 1;
   return n;
 }
-function playLead(kind, f, t){
-  if(kind === "bell"){ at(f, t, 0.5, "sine", 0.09, { echo: true, attack: 0.003 }); at(f * 2.76, t, 0.18, "sine", 0.02, { echo: true, attack: 0.002 }); }
-  else if(kind === "pluck"){ at(f, t, 0.14, "square", 0.045, { attack: 0.003 }); at(f * 2, t, 0.08, "triangle", 0.03, { attack: 0.002 }); }
-  else if(kind === "flute"){ at(f, t, 0.3, "sine", 0.11, { echo: true, attack: 0.04 }); at(f * 2, t, 0.26, "sine", 0.012, { attack: 0.05 }); }
-  else if(kind === "box"){ at(f * 2, t, 0.34, "sine", 0.08, { echo: true, attack: 0.002 }); at(f * 4, t, 0.12, "sine", 0.018, { echo: true, attack: 0.002 }); }
-  else if(kind === "brass"){ at(f, t, 0.24, "sawtooth", 0.035, { attack: 0.03 }); at(f, t, 0.24, "triangle", 0.07, { attack: 0.02 }); }
-  else { at(f, t, 0.26, "triangle", 0.11, { echo: true, attack: 0.006 }); at(f * 2, t, 0.2, "sine", 0.035, { echo: true }); }
+function playLead(kind, f, t, L = 1, V = 1){
+  if(kind === "bell"){ at(f, t, 0.5 * L, "sine", 0.09 * V, { echo: true, attack: 0.003 }); at(f * 2.76, t, 0.18 * L, "sine", 0.02 * V, { echo: true, attack: 0.002 }); }
+  else if(kind === "pluck"){ at(f, t, 0.14 * L, "square", 0.045 * V, { attack: 0.003 }); at(f * 2, t, 0.08 * L, "triangle", 0.03 * V, { attack: 0.002 }); }
+  else if(kind === "flute"){ at(f, t, 0.3 * L, "sine", 0.11 * V, { echo: true, attack: 0.04 }); at(f * 2, t, 0.26 * L, "sine", 0.012 * V, { attack: 0.05 }); }
+  else if(kind === "box"){ at(f * 2, t, 0.34 * L, "sine", 0.08 * V, { echo: true, attack: 0.002 }); at(f * 4, t, 0.12 * L, "sine", 0.018 * V, { echo: true, attack: 0.002 }); }
+  else if(kind === "brass"){ at(f, t, 0.24 * L, "sawtooth", 0.035 * V, { attack: 0.03 }); at(f, t, 0.24 * L, "triangle", 0.07 * V, { attack: 0.02 }); }
+  else { at(f, t, 0.26 * L, "triangle", 0.11 * V, { echo: true, attack: 0.006 }); at(f * 2, t, 0.2 * L, "sine", 0.035 * V, { echo: true }); }
 }
-function playDrums(kind, k, bar, t){
+function playDrums(kind, k, bar, t, feel){
+  if(kind === "none") return;
+  // 半分のテンポに聞かせる：大きい太鼓は小節の頭だけ、小さい音は2小節に1回
+  if(feel === "half" && kind === "soft"){
+    if(k === 0) at(55, t, 0.3, "sine", 0.2, { slide: 0.5 });
+    if(k === 4 && bar % 2 === 1) noiseHit(t, 0.04, 2600, 0.12);
+    return;
+  }
+  if(kind === "bodh"){   // ケルトの太鼓：3つずつの「ドン・タ・タ」
+    if(k === 0 || k === 3) at(k === 0 ? 72 : 90, t, 0.18, "sine", 0.24, { slide: 0.5 });
+    if(k === 1 || k === 2 || k === 4 || k === 5) noiseHit(t, 0.03, 3500, 0.03);
+    if(k === 6) at(120, t, 0.1, "sine", 0.12, { slide: 0.6 });
+    return;
+  }
+  if(kind === "sleigh"){ // 雪山：鈴を16分で振りつづける
+    if(k === 0 || k === 4) at(60, t, 0.16, "sine", 0.2, { slide: 0.45 });
+    noiseHit(t, 0.03, 9000, 0.05); noiseHit(t + GRID / 2, 0.018, 9000, 0.04);
+    return;
+  }
   if(kind === "soft"){
     if(k === 0) at(58, t, 0.16, "sine", 0.22, { slide: 0.45 });
     if(k === 4) noiseHit(t, 0.05, 3000, 0.08);
@@ -1481,24 +1534,73 @@ function playStep(i, t){
 function playStageStep(sd, i, t){
   const bar = Math.floor(i / 8) % BARS, k = i % 8;
   const m = game.run ? game.run.cam / PX_PER_M : 0;
-  const minor = sd.mode === "minor", K = sd.key;
-  if(echo) echo.delayTime.value = GRID;
+  const minor = sd.mode === "minor", K = sd.key, feel = sd.feel || "normal";
+  if(echo) echo.delayTime.value = feel === "half" ? GRID * 2 : feel === "six" ? GRID * 1.5 : GRID;
   if(echoFb) echoFb.gain.value = sd.echo || 0.34;
-  playDrums(sd.drum, k, bar, t);
-  // ベース
+  playDrums(sd.drum, k, bar, t, feel);
+  if(feel === "double" && sd.drum !== "sleigh") noiseHit(t + GRID / 2, 0.02, 9000, 0.025);   // 16分の刻みで速く聞かせる
+  // この小節の和音（絶対の高さ）
+  const chord = minor ? MINOR_CHORDS[bar % 4] : CHORDS[bar % 4].map(c => ROOTS[bar % 4] + c);
   const root = (minor ? MINOR_ROOTS : ROOTS)[bar % 4] + K;
-  if(k === 0 || k === 3 || k === 6) at(HZ(root - 24), t, 0.22, "triangle", 0.15);
-  // コード
-  if(k % 2 === 1){
-    if(minor) for(const c of MINOR_CHORDS[bar % 4]) at(HZ(c + K + 12), t, 0.16, "triangle", 0.03, { attack: 0.004 });
-    else for(const c of CHORDS[bar % 4]) at(HZ(ROOTS[bar % 4] + c + K + 12), t, 0.16, "square", 0.02, { attack: 0.004 });
+  // ベース
+  if(feel === "half"){ if(k === 0) at(HZ(root - 24), t, GRID * 7, "triangle", 0.13, { attack: 0.02 }); }
+  else if(feel === "six"){ if(k === 0 || k === 3 || k === 6) at(HZ(root - 24 + (k === 3 ? 7 : 0)), t, 0.2, "triangle", 0.15); }
+  else if(feel === "double"){ if(k % 2 === 0) at(HZ(root - 24 + (k === 4 ? 12 : 0)), t, 0.13, "triangle", 0.14); }
+  else if(k === 0 || k === 3 || k === 6) at(HZ(root - 24), t, 0.22, "triangle", 0.15);
+  // 和音：のばす（pad）か、うらで刻むか
+  if(sd.pad){
+    if(k === 0) for(const c of chord) at(HZ(c + K + 12), t, GRID * 8, "sine", 0.026, { attack: 0.35 });
+  }else if(k % 2 === 1){
+    for(const c of chord) at(HZ(c + K + 12), t, 0.16, minor ? "triangle" : "square", minor ? 0.03 : 0.02, { attack: 0.004 });
   }
-  // メロディ
-  const n = (m > 260 ? MELODY_B : MELODY)[bar][k];
-  if(n >= 0) playLead(sd.lead, HZ(modeNote(n, sd.mode) + K), t);
+  // 旋律
+  const pat = sd.pat || "main";
+  const base = (m > 260 ? MELODY_B : MELODY)[bar];
+  if(pat === "main"){
+    const n = base[k];
+    if(n >= 0) playLead(sd.lead, HZ(noteIn(n, sd) + K), t);
+  }else if(pat === "sparse"){
+    // 長い音だけ。小節の頭と真ん中
+    if(k === 0 || k === 4){
+      const n = base[k] >= 0 ? base[k] : base[k + 2] >= 0 ? base[k + 2] : chord[2] + 12;
+      playLead(sd.lead, HZ(noteIn(n, sd) + K), t, 2.6, 0.9);
+    }
+  }else if(pat === "arp"){
+    // 和音を上り下りするアルペジオ（half なら2つに1つ）
+    if(!(feel === "half" && k % 2 === 1)){
+      const ord = [0, 1, 2, 3, 2, 1, 2, 3][k];
+      const n = chord[ord % 3] + (ord === 3 ? 12 : 0) + 12;
+      playLead(sd.lead, HZ(noteIn(n, sd) + K + 12), t, feel === "half" ? 1.6 : 1, 0.75);
+    }
+  }else if(pat === "jig"){
+    // 3つずつの速い踊り。旋律の音から、音階を上下にくるくる動く
+    const n0 = base[k - (k % 3)] >= 0 ? base[k - (k % 3)] : chord[0] + 12;
+    const step = [0, 2, 4, 0, 2, 4, -1, 0][k];
+    playLead(sd.lead, HZ(scaleStep(noteIn(n0, sd), step, sd) + K), t, 0.7, 0.85);
+  }
   // 環境音（風・雨）
   if(sd.amb === "wind" && k === 0 && bar % 2 === 0) noiseHit(t, 0.035, 400, GRID * 8);
   if(sd.amb === "rain") noiseHit(t, 0.018, 5000, GRID);
+}
+// 旋律の音を、そのステージの音階にあわせる
+const YO = [0, 2, 5, 7, 9];
+function noteIn(n, sd){
+  if(sd.scale === "yo"){
+    const pc = ((n % 12) + 12) % 12, o = n - pc;
+    let best = YO[0], d = 99;
+    for(const y of YO){ const dd = Math.abs(y - pc); if(dd < d){ d = dd; best = y; } }
+    return o + best;
+  }
+  return modeNote(n, sd.mode);
+}
+// 音階の上で step 段うごかす
+function scaleStep(n, step, sd){
+  const sc = sd.scale === "yo" ? YO : sd.mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+  const pc = ((n % 12) + 12) % 12;
+  let idx = 0, d = 99;
+  sc.forEach((v, j) => { const dd = Math.abs(v - pc); if(dd < d){ d = dd; idx = j; } });
+  const j = idx + step, oct = Math.floor(j / sc.length);
+  return n - pc + sc[((j % sc.length) + sc.length) % sc.length] + oct * 12;
 }
 function musicStart(){
   if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; } }
@@ -1515,25 +1617,6 @@ function musicSchedule(){
     MUSIC.next += GRID; MUSIC.i++;
   }
 }
-// いま拍にどれだけ近いか
-function judgeBeat(){
-  if(!actx || !MUSIC.beats.length) return null;
-  const now = actx.currentTime;
-  let d = 1e9;
-  for(const t of MUSIC.beats) d = Math.min(d, Math.abs(now - t));
-  if(d <= 0.085) return "PERFECT";
-  if(d <= 0.17)  return "GOOD";
-  return null;
-}
-// 拍の上に乗っているか（画面を脈打たせる用）
-function beatPulse(){
-  if(!actx || !MUSIC.beats.length) return 0;
-  const now = actx.currentTime;
-  let d = 1e9;
-  for(const t of MUSIC.beats) if(t <= now) d = Math.min(d, now - t);
-  return Math.max(0, 1 - d / 0.18);
-}
-
 const SFX = {
   jump(){  tone(420, .14, "sine", .13, 1.9); },
   jump2(){ tone(620, .16, "sine", .12, 1.7); },
@@ -1562,6 +1645,7 @@ function showTitle(){
   $("evoView").classList.add("hide"); $("nameView").classList.add("hide"); $("rGrow").classList.add("hide");
   if(game.best > 0){ $("titleBest").textContent = `ベスト ${Math.floor(game.best)}　（いちばん深く 地下${floorOf(game.bestDist)}階）`; $("titleBest").classList.remove("hide"); }
   game.run = makeRun(); game.run.gen = false;   // おうちなので障害物は出さない
+  preloadStage();
   refreshHome();
 }
 // おうちの表示を今の状態に合わせる
@@ -1582,7 +1666,7 @@ function start(){
   game.runGems = 0;
   game.run = makeRun({ magnet: perk("magnet"), goal: true });
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
-  game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.revived = false; game.passedDeath = false;
+  game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.perfects = 0; game.gsets = {}; game.revived = false; game.passedDeath = false;
   musicStart();
   game.prevBest = game.best;
   $("titleView").classList.add("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
@@ -1598,6 +1682,7 @@ function die(){
   const earned = picked + dist;
   pet.gems += earned; pet.total += earned; savePet();
   game.lastDeath = m; store.set("poyon_lastdeath_m", m);   // つぎに来たとき、ここが目印になる
+  markPlayed();
   game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m };
   if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
   game.mode = "dead"; game.deadAt = game.time; game.shake = 12; game.combo = 0;
@@ -1611,7 +1696,7 @@ function die(){
     if(game.mode !== "dead") return;
     $("rLabel").textContent = "ここで ちからつきた";
     $("rFloor").textContent = floorText(floorOf(m), true);
-    $("rDist").innerHTML = `${Math.floor(m)} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
+    $("rDist").innerHTML = `${Math.floor(m)} m ${game.bonus ? `<span style="color:#C98016">＋ ボーナス ${game.bonus}</span>` : ""}
       <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
     $("rNew").innerHTML = isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "";
     $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
@@ -1645,6 +1730,7 @@ function clearRun(){
   const earned = picked + dist + reward;
   pet.gems += earned; pet.total += earned; savePet();
   prog.clears++; if(perfect) prog.perfect = true; saveProg();
+  markPlayed();
   game.lastDeath = 0; store.set("poyon_lastdeath_m", 0);
   game.lastRun = { gems: earned, isNew: score > game.best, revived: game.revived, m, clear: true, perfect };
   if(m > game.bestDist){ game.bestDist = m; store.set("poyon_bestdist_m", m); }
@@ -1658,7 +1744,7 @@ function clearRun(){
     if(game.mode !== "clear") return;
     $("rLabel").textContent = "ゴール！　クリア";
     $("rFloor").textContent = floorText(GOAL_FLOOR, true);
-    $("rDist").innerHTML = `${m} m ${game.bonus ? `<span style="color:#C98016">＋ リズム ${game.bonus}</span>` : ""}
+    $("rDist").innerHTML = `${m} m ${game.bonus ? `<span style="color:#C98016">＋ ボーナス ${game.bonus}</span>` : ""}
       <div style="font-size:15px;margin-top:4px">合計 <b style="font-size:22px">${score}</b>${game.bestCombo >= 2 ? `　最高 ${game.bestCombo} コンボ` : ""}</div>`;
     $("rNew").innerHTML = perfect ? `<span class="newrec">ノーミス ＆ クリスタル ぜんぶ！</span>`
                         : (isNew && game.prevBest > 0 ? `<span class="newrec">NEW RECORD</span>` : "");
@@ -1739,6 +1825,7 @@ function revive(){
 
 /* ---- そだてる ---- */
 let evoPick = null;
+const NOT_PLAYED = "この姿で、まだ いちども もぐっていない。1回もぐってから進化しよう";
 function openEvo(){
   game.ui = "evo"; evoPick = null;
   $("resultView").classList.add("hide");
@@ -1759,7 +1846,7 @@ function renderEvo(){
              : (pet.line === "human" && pet.stage === 2) ? ["human_m", "human_f"]
              : (pet.line === "slime" && pet.stage === 4) ? ["slime", "slime_hard"] : null;
   if(fork){
-    const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost;
+    const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost && playedNow();
     if(pet.stage === 1) chart.classList.add("hide");
     else drawChart(pet.line, pet.stage);
     for(const line of fork){
@@ -1783,7 +1870,9 @@ function renderEvo(){
       box.appendChild(el);
     }
     const what = pet.stage === 1 ? "どの道にすすむか" : pet.stage === 2 ? "オスとメス、どちらにするか" : "どちらの道にすすむか";
-    if(!ok){
+    if(!playedNow()){
+      $("evoNote").textContent = NOT_PLAYED;
+    }else if(!ok){
       $("evoNote").textContent = `あと 💎${cost - pet.gems} で進化できる`;
     }else if(!evoPick){
       $("evoNote").innerHTML = `${what}、ここで決める<div class="warn">えらんだら、もう別の道には行けない</div>`;
@@ -1806,8 +1895,9 @@ function renderEvo(){
     $("evoNote").textContent = "この道の、いちばん先まで来た。";
     return;
   }
-  const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost;
-  $("evoNote").textContent = ok ? `${info.label}の道の、つぎの姿` : `あと 💎${cost - pet.gems} で進化できる`;
+  const played = playedNow();
+  const next = pet.stage + 1, cost = EVO_COST[next], ok = pet.gems >= cost && played;
+  $("evoNote").textContent = !played ? NOT_PLAYED : ok ? `${info.label}の道の、つぎの姿` : `あと 💎${cost - pet.gems} で進化できる`;
   const card = document.createElement("div");
   card.className = "pickone";
   card.appendChild(formThumb(pet.line, next, 64));
@@ -1818,7 +1908,7 @@ function renderEvo(){
   pick.appendChild(card);
   const b = document.createElement("button");
   b.className = "btn sub" + (ok ? " ready" : "");
-  b.textContent = ok ? "進化する" : `💎 が たりない`;
+  b.textContent = ok ? "進化する" : !played ? "まず もぐってみよう" : `💎 が たりない`;
   if(ok) b.addEventListener("pointerdown", ev => { ev.stopPropagation(); ev.preventDefault(); doEvolve(pet.line); });
   else b.disabled = true;
   pick.appendChild(b);
@@ -1841,13 +1931,14 @@ function drawChart(line, stage){
 function closeEvo(){ game.ui = null; $("evoView").classList.add("hide"); }
 
 function doEvolve(line){
-  if(pet.stage >= 5) return;
+  if(pet.stage >= 5 || !playedNow()) return;
   const fork = (pet.line === "human" && pet.stage === 2 && (line === "human_m" || line === "human_f"))
             || (pet.line === "slime" && pet.stage === 4 && line === "slime_hard" && hardUnlocked());
   if(pet.stage > 1 && line !== pet.line && !fork) return;   // いちど選んだ道からは外れない（決まった分かれ道だけ例外）
   const next = pet.stage + 1, cost = EVO_COST[next];
   if(pet.gems < cost) return;
   pet.gems -= cost; pet.line = line; pet.stage = next; savePet();
+  preloadStage();
   // むずかしいに進んだら、スライムで読んだ第1〜4章をそのまま引き継ぐ
   if(line === "slime_hard") story.slime_hard = Math.max(story.slime_hard, story.slime);
   unlockStory(skey(line), next);
@@ -2324,6 +2415,7 @@ function newChild(){
   store.set("poyon_family", family);
   pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
   pet.line = "slime"; pet.stage = 1;
+  prog.played = {}; saveProg();   // 新しい子は、自分でもぐってから進化する
   savePet(); refreshHome();
   game.ui = null; $("retireView").classList.add("hide");
   askIntroName();
@@ -2572,7 +2664,7 @@ function restartAll(){
   pet.line = "slime"; pet.stage = 1; pet.gems = 0; pet.total = 0;
   family.length = 0;
   story.slime = 1; story.beast = 1; story.human = 1; story.slime_hard = 1;
-  prog.done = {}; prog.perfect = false; prog.seen = {}; prog.clears = 0; markSeen("slime", 1);
+  prog.done = {}; prog.perfect = false; prog.seen = {}; prog.clears = 0; prog.played = {}; markSeen("slime", 1);
   game.best = 0; game.bestDist = 0; game.lastDeath = 0; game.lastRun = null;
   savePet(); saveStory();
   $("titleBest").classList.add("hide");
@@ -2726,6 +2818,9 @@ const STAGE_OBJ = Object.keys(STAGE_BG);   // 12ステージぶん、ぜんぶ�
 const stageObj = {};
 function curObj(){
   const k = game.mode === "title" ? null : stageKey();
+  return loadObj(k);
+}
+function loadObj(k){
   if(!k || STAGE_OBJ.indexOf(k) < 0) return null;
   if(!stageObj[k]){
     stageObj[k] = {};
@@ -2750,6 +2845,13 @@ function curObj(){
 function floorText(n, spaced){
   if(stageKey()) return `${n} / ${GOAL_FLOOR}`;
   return spaced ? `地下 ${n} 階` : `地下${n}階`;
+}
+/* つぎに潜るステージの絵を、おうちにいるうちに読みこんでおく。
+   読みこみが間に合わないと、最初の一瞬だけ前の洞窟の絵が見えてしまう（ゆま指摘 9/18） */
+function preloadStage(){
+  const k = stageKey();
+  if(!k) return;
+  loadStageBg(k); loadObj(k);
 }
 function curStage(){
   const k = game.mode === "title" ? null : stageKey();
@@ -2777,13 +2879,13 @@ function drawStageBg(t, cam){
   }
   // 障害物が背景に埋もれないよう、うすく白をかける
   ctx.fillStyle = "rgba(255,255,255,.24)"; ctx.fillRect(0, 0, W, GY);
-  const pulse = (game.mode === "play") ? beatPulse() : 0;
-  if(pulse > 0.02){ ctx.fillStyle = `rgba(255,255,255,${pulse * 0.09})`; ctx.fillRect(0, 0, W, H); }
 }
 
 function drawBackground(cam){
   const st = curStage();
   if(st){ drawStageBg(st, cam); return; }
+  // ステージの絵がまだ読みこめていないあいだは、前の洞窟を見せずに暗い色で待つ
+  if(game.mode !== "title" && stageKey()){ ctx.fillStyle = "#2A2238"; ctx.fillRect(0, 0, W, H); return; }
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, COL.wallTop); g.addColorStop(.5, COL.wall); g.addColorStop(1, COL.wallDeep);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -2796,9 +2898,6 @@ function drawBackground(cam){
   ctx.restore();
 
   // 光るクリスタルとキノコ（洞窟を「暗い」ではなく「ファンタジー」に見せる）
-  // 拍に合わせてふわっと明るくし、リズムを目でも分かるようにする
-  const pulse = (game.mode === "play") ? beatPulse() : 0;
-  if(pulse > 0.02){ ctx.fillStyle = `rgba(255,255,255,${pulse * 0.09})`; ctx.fillRect(0, 0, W, H); }
 
   // 飾りは「壁の模様」として上のほうにだけ置く。
   // 地面に置くと障害物と見分けがつかなくなるため、地面には一切置かない。
@@ -2988,7 +3087,7 @@ function drawSigns(run){
 function drawObstacles(run){
   const cam = run.cam;
   for(const o of run.obs){
-    const x = o.x - cam;
+    const x = (o.k === "bat" ? o.bx : o.x) - cam;
     if(x < -140 || x > W + 60) continue;
     const so = curObj();
     if(o.k === "spike" && so && ready(so.spike1) && ready(so.spike3)){
@@ -3397,6 +3496,16 @@ function runFrame(P){
     return f;
   }
   if(blob && game.squashT > 0) return fr[3];
+  if(blob){
+    // スライム形は、地面では決まったテンポで「ぽよん」と弾む（曲の1拍に1回）。
+    // 4コマを時間で回すと、潜って速くなるほどコマ送りが速くなり、ななめに伸びたコマも混ざって
+    // 「ポヨポヨポヨ」とせわしなく見えていた（ゆま指摘 9/18）。
+    // 着地でつぶれる → 丸くなって浮く → 着地、を1拍でなめらかに回す。浮く高さは sin でなめらかに
+    const s = (game.time / BEAT) % 1;
+    const f = s < 0.14 || s > 0.9 ? fr[0] : (s < 0.26 || s > 0.78) ? fr[3] : fr[2];
+    f._blobLift = Math.sin(Math.PI * s) * 8;
+    return f;
+  }
   // 速さに合わせて足の回転を上げる（潜るほど速くなる）
   const rate = (blob ? 7 : 9) + Math.min(5, (game.run ? game.run.cam : 0) / 4000);
   const i = Math.floor(game.time * rate) % 4;
@@ -3685,7 +3794,7 @@ function drawHUD(run){
   label(floorText(floorOf(m), true), hx, y - fl * 4, (roomy ? 34 : 20) * (1 + 0.3 * fl), fl > 0.02 ? "#C98016" : "#5B4A86");
   label(`${Math.floor(m)} m ／ ゴール ${GOAL_M} m`, hx, y + (roomy ? 42 : 24), roomy ? 18 : 12, "#7A68A8");
   if(game.bonus > 0){
-    label(`リズム ＋${game.bonus}`, hx, y + (roomy ? 70 : 40), roomy ? 16 : 12, "#C98016");
+    label(`ボーナス ＋${game.bonus}`, hx, y + (roomy ? 70 : 40), roomy ? 16 : 12, "#C98016");
   }
   if(game.best > 0){
     const by = y + (roomy ? (game.bonus ? 96 : 70) : 5);
@@ -3696,6 +3805,42 @@ function drawHUD(run){
     ctx.textAlign = "center";
     const k = Math.min(1, game.combo / 20);
     label(`${game.combo} コンボ`, W / 2, bandTop + 38, 22 + k * 8, "#FF7A9C");
+  }
+}
+
+/* ---- クリスタルの連続とり ----
+   ジャンプを拍に合わせる「音ゲー」はやめた（ゆま 9/18：音ゲーの要素は再現できない）。
+   かわりに、3つ並びのクリスタルを全部とると PERFECT、2つなら GOOD。
+   取りこぼさずに続けると PERFECT が重なり（PERFECT 2, 3…）、ボーナス点が増える。
+   1つだけ置いたクリスタルも「取りこぼさずに続いている」数（コンボ）には入る */
+function gemChain(run){
+  const sets = game.gsets;
+  for(const q of run.gotQ){
+    game.combo++; game.bestCombo = Math.max(game.bestCombo, game.combo);
+    const g = sets[q.gid] || (sets[q.gid] = { got: 0, miss: 0, size: q.set, done: false });
+    g.got++;
+    if(g.size === 3 && g.got === 3 && !g.done){
+      g.done = true;
+      game.perfects++;
+      game.bonus += Math.round((2 + Math.min(8, game.perfects - 1)) * perk("combo"));
+      game.pops.push({ text: game.perfects >= 2 ? `PERFECT ${game.perfects}` : "PERFECT", col: "#FFB300", t: 0 });
+      if(actx) at(1320, actx.currentTime, .12, "square", .09, { echo: true });
+      burst(PX, GY + run.P.y, 10, "#FFD13B", 170);
+    }
+  }
+  run.gotQ.length = 0;
+  // 取りこぼし：体の後ろへ流れていったクリスタル
+  const wx = run.cam + PX;
+  for(const q of run.gems){
+    if(q.got || q.missed || q.x > wx - 34) continue;
+    q.missed = true;
+    game.combo = 0; game.perfects = 0;
+    const g = sets[q.gid] || (sets[q.gid] = { got: 0, miss: 0, size: q.set, done: false });
+    g.miss++;
+    if(g.size === 3 && g.got + g.miss === 3 && !g.done){
+      g.done = true;
+      if(g.got === 2){ game.bonus += 1; game.pops.push({ text: "GOOD", col: "#3FA9E0", t: 0 }); }
+    }
   }
 }
 
@@ -3715,19 +3860,6 @@ function frame(now){
         if(e === "jump" || e === "jump2"){
           if(e === "jump"){ SFX.jump(); burst(PX, GY, 6, "rgba(255,255,255,.85)", 90); }
           else { SFX.jump2(); burst(PX, GY + run.P.y + R, 10, "#B8F7F4", 150); }
-          const j = judgeBeat();
-          if(j === "PERFECT"){
-            game.combo++; game.bestCombo = Math.max(game.bestCombo, game.combo);
-            game.bonus += Math.round((2 + Math.min(8, Math.floor(game.combo / 5))) * perk("rhythm"));
-            game.pops.push({ text: game.combo >= 2 ? `PERFECT ${game.combo}` : "PERFECT", col: "#FFB300", t: 0 });
-            at(1320, actx.currentTime, .12, "square", .09, { echo: true });
-            burst(PX, GY + run.P.y, 10, "#FFD13B", 170);
-          }else if(j === "GOOD"){
-            game.bonus += 1;
-            game.pops.push({ text: "GOOD", col: "#3FA9E0", t: 0 });
-          }else{
-            game.combo = 0;
-          }
         }
         else if(e === "land"){ SFX.land(); game.squashT = 0.12; burst(PX, GY, 5, "rgba(255,255,255,.8)", 70); }
         else if(e === "gem"){
@@ -3736,6 +3868,7 @@ function frame(now){
         }
       }
       run.ev.length = 0;
+      gemChain(run);
       if(run.cleared){ clearRun(); break; }
       if(run.P.dead){ die(); break; }
     }
