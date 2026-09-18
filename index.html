@@ -745,6 +745,8 @@ const FOE_CHUNKS = [
 ];
 const FORK_CHUNKS = [
   {tier:0, items:[{k:"fork"}]},
+  {tier:2, items:[{k:"fork", n:2}]},      // 後半は、しるしが2つ続く
+  {tier:3, items:[{k:"fork", n:3}]},
 ];
 const SYMS = ["★", "♥", "◆", "♣", "●", "▲"];
 const FOE_W = 34;            // 敵の幅
@@ -752,6 +754,10 @@ const ATK_RANGE = 96;        // 攻撃がとどく前の距離
 const ATK_TIME = 0.24, ATK_CD = 0.34;
 const FORK_LEAD = 1.7;       // 看板を見てから門に着くまでの秒数
 const FORK_Y = -78;          // これより上を通れば「上の門」
+/* 分かれ道は、ほんとうに上の段・下の段に分ける（ゆま 9/18：「道が分かれているのが分かるように」）。
+   門の少し手前から、うすい橋（上の段）がのびる。下からは跳んでくぐりぬけられ、上に乗れる（一方通行の床）。
+   橋の終わりに、まちがった段だけ「行き止まり」の壁がある */
+const LEDGE_H = 86, LEDGE_BEFORE = 70, LEDGE_LEN = 300;
 const SIZE = { spike:{w:28,h:22}, spike2:{w:54,h:22}, batLow:{w:0,y:-20}, batHigh:{w:0,y:-72} };
 // 天井から下がる岩の下端。低すぎるとスライムの絵がめり込んで「当たっているのに死なない」ように見える
 const CEIL_BOTTOM = -70;
@@ -759,12 +765,20 @@ const CEIL_BOTTOM = -70;
 /* ---------------------------------------------------------
    1回ぶんの冒険（テストでも同じものを使う）
    --------------------------------------------------------- */
+/* ステージの並びは固定（ゆま 9/18：暗記してクリアしていけるように）。
+   ステージ（系統と段階）ごとに決まった種から乱数を作るので、何回もぐっても同じ置き方・同じコウモリの飛び方になる */
+function seededRnd(seed){
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function seedOf(key){ let h = 2166136261; for(const c of key){ h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 function makeRun(opt = {}){
   return {
     cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
     goalX: opt.goal ? GOAL_M * PX_PER_M + PX : 0, cleared: false, gemTotal: 0,
     gems: [], gid: 0, gotQ: [], plats: [], platOn: opt.plat ?? false, foeOn: opt.foe ?? false, forkOn: opt.fork ?? false,
     atk: 0, atkCd: 0, magnet: opt.magnet ?? 0,
+    rnd: seededRnd(seedOf(opt.seed || "cave")),
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
     ev: [],   // 画面側に伝える出来事（着地・ジャンプなど）
@@ -792,13 +806,23 @@ function placeChunk(run, chunk, x0, t0){
     if(it.k === "foe"){
       run.obs.push({k:"foe", x, w:FOE_W, alive:true}); end = x + FOE_W;
     }else if(it.k === "fork"){
-      // 看板 → FORK_LEAD 秒後に門。正しい門は上か下かランダム
-      const sym = SYMS[Math.floor(Math.random() * SYMS.length)];
-      let other = sym; while(other === sym) other = SYMS[Math.floor(Math.random() * SYMS.length)];
-      const gx = x + FORK_LEAD * v;
-      run.obs.push({k:"hint", x, sym});
-      run.obs.push({k:"gate", x:gx, w:24, sym, other, upOk: Math.random() < .5, passed:false});
-      end = gx + 24;
+      // 看板 → 門。後半は しるしが2つ・3つ続き、門も同じ順に続く（ゆま 9/18）
+      const n = it.n || 1, syms = [];
+      for(let i = 0; i < n; i++) syms.push(SYMS[Math.floor(run.rnd() * SYMS.length)]);
+      run.obs.push({k:"hint", x, sym: syms[0], syms});
+      let gx = x + (FORK_LEAD + (n - 1) * 0.5) * v;
+      for(const sym of syms){
+        let other = sym; while(other === sym) other = SYMS[Math.floor(run.rnd() * SYMS.length)];
+        const upOk = run.rnd() < .5;
+        run.obs.push({k:"gate", x:gx, w:24, sym, other, upOk, passed:false});
+        const lx1 = gx + LEDGE_LEN;
+        run.plats.push({x0:gx - LEDGE_BEFORE, x1:lx1, h:LEDGE_H, thin:true});
+        // 行き止まり：正しいのが上なら下の段を、下なら上の段をふさぐ
+        run.obs.push(upOk ? {k:"wall", x:lx1 - 26, w:22, y0:-LEDGE_H + 14, y1:0}
+                          : {k:"wall", x:lx1 - 26, w:22, y0:CEIL - 50, y1:-LEDGE_H});
+        end = lx1 + 10;
+        gx = end + 0.9 * v + LEDGE_BEFORE;      // つぎの門。前の橋から下りて、ひと息ついてから
+      }
     }else if(it.k === "plat"){
       run.plats.push({x0:x, x1:x + it.w, h:it.h}); end = x + it.w;
     }else if(it.k === "pit"){
@@ -809,8 +833,8 @@ function placeChunk(run, chunk, x0, t0){
     }else if(it.k === "batLow" || it.k === "batHigh"){
       // コウモリは止まっていず、前から飛んでくる。速さは1ぴきずつちがい、飛びながらも速くなったり遅くなったりする（ゆま 9/18）
       run.obs.push({k:"bat", x, y:SIZE[it.k].y, bx:x,
-                    vb: 20 + Math.random() * 50, wa: 0, ww: 1.5 + Math.random() * 2.5});
-      { const b = run.obs[run.obs.length - 1]; b.wa = b.vb * (0.3 + Math.random() * 0.4); }
+                    vb: 20 + run.rnd() * 50, wa: 0, ww: 1.5 + run.rnd() * 2.5});
+      { const b = run.obs[run.obs.length - 1]; b.wa = b.vb * (0.3 + run.rnd() * 0.4); }
       end = x + 12;
     }else{
       const s = SIZE[it.k];
@@ -822,8 +846,8 @@ function placeChunk(run, chunk, x0, t0){
   return end;
 }
 
-function generate(run){
-  const limit = run.cam + W + 400;
+function generate(run, upto){
+  const limit = upto ?? run.cam + W + 400;
   if(!run.tAt) run.tAt = travelTime(PX, run.nextX);   // 走り始めてから最初の障害物に着くまで
   while(run.nextX < limit){
     if(run.goalX && run.nextX > run.goalX - 260) break;   // ゴールの手前は何も置かない
@@ -833,9 +857,9 @@ function generate(run){
     CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 3 : 1; for(let i=0;i<w;i++) pool.push(c); } });
     if(run.platOn) PLAT_CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 4 : 2; for(let i=0;i<w;i++) pool.push(c); } });
     if(run.foeOn)  FOE_CHUNKS.forEach(c =>  { if(c.tier <= tier){ const w = c.tier === tier ? 4 : 2; for(let i=0;i<w;i++) pool.push(c); } });
-    if(run.forkOn) FORK_CHUNKS.forEach(c => { for(let i=0;i<5;i++) pool.push(c); });
+    if(run.forkOn) FORK_CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 5 : 2; for(let i=0;i<w;i++) pool.push(c); } });
     const np = run.plats.length;
-    const chunk = pool[Math.floor(Math.random() * pool.length)];
+    const chunk = pool[Math.floor(run.rnd() * pool.length)];
     const end = placeChunk(run, chunk, run.nextX, run.tAt);
     // 次の障害物は「跳ぶ瞬間が拍に乗る」位置に置く。
     // 間隔はこれまでの最低値を必ず満たす方向（切り上げ）にしか動かさない
@@ -843,7 +867,7 @@ function generate(run){
     const want  = tEnd + gapFor(m);
     const snapped = Math.ceil((want - JUMP_LEAD) / GRID) * GRID + JUMP_LEAD;
     // クリスタルは「跳べば通る道すじ」に置く。拾うために無理をさせない
-    const r = Math.random();
+    const r = run.rnd();
     const newPlats = run.plats.slice(np);
     const special = chunk.items.some(it => it.k === "fork" || it.k === "foe");
     if(newPlats.length && r < 0.75){
@@ -865,16 +889,45 @@ function generate(run){
     }else if(r < 0.80){
       run.gems.push({ x: end + 46, y: -R - 10, got: false, gid: ++run.gid, set: 1 });
       run.gemTotal += 1;
+    }else{
+      (run._slots || (run._slots = [])).push(end + 46);   // あとで数を合わせるとき、1つ置ける場所
     }
     run.nextX = advanceBy(end, snapped - tEnd);
     run.tAt = snapped;
   }
+  if(upto != null) return;   // 先に全部作るときは、捨てない
   // 通り過ぎたものは捨てる
   const cut = run.cam - 100;
   run.obs  = run.obs.filter(o => (o.x + (o.w || 12)) > cut);
   run.pits = run.pits.filter(p => p.x1 > cut);
   run.plats = run.plats.filter(p => p.x1 > cut);
   run.gems = run.gems.filter(q => !q.got && q.x > cut);
+}
+
+/* クリスタルの数は、段階ごとに決まった数にする（ゆま 9/18）。
+   ゴールまでを先に全部作ってから、多ければ減らし、少なければ「1つだけ置ける場所」に足してそろえる。
+   並びは固定の乱数なので、同じステージなら毎回同じ場所に同じ数 */
+const GEM_TARGET = [0, 60, 70, 80, 90, 100];
+function fixGems(run, target){
+  const gs = run.gems;
+  const del = gid => { for(let i = gs.length - 1; i >= 0; i--) if(gs[i].gid === gid) gs.splice(i, 1); };
+  let total = gs.length;
+  // 多いとき：1つだけのクリスタルから、次に3つ並びを減らす（前から順に間引く）
+  while(total > target){
+    const one = gs.filter(q => q.set === 1);
+    if(one.length && (total - target < 3 || !gs.some(q => q.set === 3))){ const q = one[Math.floor(run.rnd() * one.length)]; del(q.gid); total -= 1; continue; }
+    const three = [...new Set(gs.filter(q => q.set === 3).map(q => q.gid))];
+    if(!three.length) break;
+    del(three[Math.floor(run.rnd() * three.length)]); total -= 3;
+  }
+  // 少ないとき：あいている場所に1つずつ
+  const slots = (run._slots || []).slice();
+  while(total < target && slots.length){
+    const x = slots.splice(Math.floor(run.rnd() * slots.length), 1)[0];
+    gs.push({ x, y: -R - 10, got: false, gid: ++run.gid, set: 1 }); total += 1;
+  }
+  gs.sort((a, b) => a.x - b.x);
+  run.gemTotal = total;
 }
 
 const inPit = (run, wx) => run.pits.some(p => wx > p.x0 && wx < p.x1);
@@ -976,12 +1029,11 @@ function stepRun(run, dt){
     o.passed = true;
     const up = P.y < FORK_Y;
     o.took = up ? "up" : "down";
-    if(up !== o.upOk && !safe){ P.dead = "wrong"; return; }
-    run.ev.push("rightway");
+    if(up === o.upOk) run.ev.push("rightway");
   }
   if(safe) return;
   for(const q of run.plats){
-    if(q.x0 > wx + 40 || q.x1 < wx - 40) continue;
+    if(q.thin || q.x0 > wx + 40 || q.x1 < wx - 40) continue;
     // 上の面より少し下から下を「横の壁」とみなす。上に乗っているときは当たらない
     if(circleRect(wx, P.y, hr, q.x0, -q.h + 7, q.x1, 0)){ P.dead = "wall"; return; }
   }
@@ -991,6 +1043,8 @@ function stepRun(run, dt){
       if(circleRect(wx, P.y, hr, o.x + 5, -o.h + 7, o.x + o.w - 5, 0)){ P.dead = "spike"; return; }
     }else if(o.k === "ceil"){
       if(circleRect(wx, P.y, hr, o.x, CEIL - 50, o.x + o.w, CEIL_BOTTOM)){ P.dead = "ceil"; return; }
+    }else if(o.k === "wall"){
+      if(circleRect(wx, P.y, hr, o.x, o.y0, o.x + o.w, o.y1)){ P.dead = "wrong"; return; }
     }else if(o.k === "foe"){
       if(o.alive && circleRect(wx, P.y, hr, o.x + 4, CEIL - 50, o.x + o.w - 4, 0)){ P.dead = "foe"; return; }
     }else if(o.k === "bat"){
@@ -1845,10 +1899,13 @@ function refreshHome(){
 function start(){
   game.mode = "play"; game.ui = null;
   game.runGems = 0;
-  game.run = makeRun({ magnet: perk("magnet"), goal: true, plat: PLAT_STAGES.indexOf(pet.stage) >= 0,
+  game.run = makeRun({ magnet: perk("magnet"), goal: true, seed: pet.stage === 1 ? "cave" : `${pet.line}_${pet.stage}`, plat: PLAT_STAGES.indexOf(pet.stage) >= 0,
                        foe: pet.line === "beast" && pet.stage >= 3,
                        fork: pet.line.indexOf("human") === 0 && pet.stage >= 3 });
   $("atkBtn").classList.toggle("hide", !game.run.foeOn);
+  // ゴールまで先に作って、クリスタルの数をそろえる
+  generate(game.run, game.run.goalX + 2000);
+  fixGems(game.run, GEM_TARGET[pet.stage]);
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
   game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.perfects = 0; game.gsets = {}; game.revived = false; game.passedDeath = false;
   musicStart();
@@ -1887,7 +1944,7 @@ function die(){
     $("rBest").innerHTML = `ベスト <b>${Math.floor(game.best)}</b>`;
     const gap = Math.floor(game.best - score);
     $("rGap").textContent = (!isNew && gap > 0 ? `ベストまで あと ${gap}` : "") + (game.revived ? "　（復活を使った）" : "");
-    $("rGems").innerHTML = `💎 ＋${earned}<span style="font-size:11px;color:#C98016">（ひろった ${picked}${dist ? `＋きょり ${dist}` : ""}）</span>　もちもの <b>${pet.gems}</b>`;
+    $("rGems").innerHTML = `💎 ＋${earned}<span style="font-size:11px;color:#C98016">（ひろった ${picked}${dist ? `＋きょり ${dist}` : ""}）</span>　もちもの <b>${pet.gems}</b>` + `<div style="font-size:12px;color:#7A68A8;margin-top:2px">このステージのクリスタル ${game.runGems} / ${run.gemTotal}</div>`;
     // 結果画面には「そだてられる」を出さない（ゆま 9/17）。おうちの「そだてる」の！で知らせる
     $("reviveBtn").classList.toggle("hide", game.revived);
     $("reviveBtn").textContent = noAds() ? "▶　復活する（広告なし）" : "▶　広告を見て復活";
@@ -3376,6 +3433,34 @@ function drawSigns(run){
 /* 台の絵。ステージごとの台（Gemini）assets/stage_obj/{ステージ}_plat.png を、台の大きさに合わせて置く。
    まだ絵が無いステージは、ステージの床の絵を切って台にする */
 const platImg = {};
+// 上の段の橋（Gemini の横長の絵を、はしを残して伸ばす）。下にうすい影
+function drawLedge(q, x, w, top){
+  const im = gim("ledge"), th = 16;
+  ctx.fillStyle = "rgba(60,36,28,.18)"; ctx.fillRect(x + 4, GY - 3, w - 8, 5);
+  if(im){
+    // 絵の横幅を橋の長さに合わせ、縦は比率のまま。歩く面（絵の上から surf の位置）を橋の高さにそろえる
+    const surf = LEDGE_SURF[stageKey()] || 0;
+    const dh = w * im.naturalHeight / im.naturalWidth;
+    ctx.save(); ctx.shadowColor = "rgba(40,24,18,.45)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 6;
+    ctx.drawImage(im, x, top - surf * dh, w, dh);
+    ctx.restore();
+  }else{
+    ctx.fillStyle = "#B08A60"; ctx.fillRect(x, top, w, th);
+    ctx.strokeStyle = COL.line; ctx.lineWidth = 2; ctx.strokeRect(x + 1, top + 1, w - 2, th - 2);
+  }
+}
+const LEDGE_SURF = { human_3: 0.02, human_4: 0.57, human_5: 0.40 };   // 橋の絵の「歩く面」の位置（上からの割合）
+// 行き止まり（Gemini の閉じた扉・柵の絵）
+function drawDeadEnd(o, x){
+  const im = gim("wall");
+  const top = GY + o.y0, h = o.y1 - o.y0;
+  if(im){
+    const w = Math.max(o.w + 20, h * im.naturalWidth / im.naturalHeight);
+    ctx.drawImage(im, x + o.w / 2 - w / 2, top, w, h);
+  }else{
+    ctx.fillStyle = "#6B5B90"; ctx.fillRect(x, top, o.w, h);
+  }
+}
 function drawPlats(run){
   if(!run.plats.length) return;
   const k = stageKey();
@@ -3386,6 +3471,7 @@ function drawPlats(run){
   for(const q of run.plats){
     const x = q.x0 - run.cam, w = q.x1 - q.x0, top = GY - q.h;
     if(x > W + 20 || x + w < -20) continue;
+    if(q.thin){ drawLedge(q, x, w, top); continue; }
     // 足もとの影
     ctx.fillStyle = "rgba(60,36,28,.22)"; ctx.fillRect(x + 3, GY - 3, w, 6);
     if(ready(im)){
@@ -3458,21 +3544,31 @@ function drawHint(o, x){
   if(ready(IMG.sign)){ const w = h * IMG.sign.naturalWidth / IMG.sign.naturalHeight; ctx.drawImage(IMG.sign, cx - w / 2, GY - h + 2, w, h); }
   const bob = Math.sin(game.time * 4) * 2;
   // 頭の上にもふきだしで出す（看板の字が小さくても見える）
+  const syms = o.syms || [o.sym], n = syms.length, bw = 40 + (n - 1) * 34;
   ctx.fillStyle = "rgba(255,248,238,.95)"; ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.arc(cx, GY - h - 26 + bob, 20, 0, 7); ctx.fill(); ctx.stroke();
-  symText(o.sym, cx, GY - h - 26 + bob, 24, "#C0506A");
+  roundRect(cx - bw / 2, GY - h - 46 + bob, bw, 40, 20); ctx.fill(); ctx.stroke();
+  syms.forEach((sy, i) => {
+    const sx = cx - (n - 1) * 17 + i * 34;
+    symText(sy, sx, GY - h - 26 + bob, 24, "#C0506A");
+    if(i < n - 1){ ctx.fillStyle = "#9A8ABC"; ctx.font = "900 11px sans-serif"; ctx.fillText("›", sx + 17, GY - h - 26 + bob); }
+  });
 }
 function drawGate(o, x){
   const im = gim("gate");
   const cx = x + o.w / 2;
-  const lowH = -FORK_Y, upTop = bandTop + 6, upH = (GY + FORK_Y) - upTop;
+  // 下の門は橋の下、上の門は橋の上に立てる
+  const lowH = LEDGE_H - 14, upTop = bandTop + 6, upH = (GY - LEDGE_H) - upTop;
   const upSym = o.upOk ? o.sym : o.other, lowSym = o.upOk ? o.other : o.sym;
   const draw = (top, hh, sym) => {
     if(im){
-      const w = hh * im.naturalWidth / im.naturalHeight;
+      // 門は子がくぐれる広さに（絵の比率より少し横に広げる）
+      const w = Math.max(64, hh * im.naturalWidth / im.naturalHeight);
       ctx.drawImage(im, cx - w / 2, top, w, hh);
-      // 丸い板（絵の上から9%あたり）にしるし
-      symText(sym, cx, top + hh * 0.085, Math.max(18, w * 0.34), "#594236");
+      // しるしは大きな丸い札にして、門のてっぺんに掛ける（小さい板の上だと読めなかった）
+      const by = top + Math.min(hh * 0.12, 16), r = 15;
+      ctx.fillStyle = "rgba(255,250,240,.97)"; ctx.strokeStyle = "#594236"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(cx, by, r, 0, 7); ctx.fill(); ctx.stroke();
+      symText(sym, cx, by, 20, "#C0506A");
     }else{
       ctx.strokeStyle = COL.line; ctx.lineWidth = 4; ctx.strokeRect(cx - 20, top, 40, hh);
       symText(sym, cx, top + 14, 18);
@@ -3489,7 +3585,8 @@ function drawObstacles(run){
     const so = curObj();
     if(o.k === "foe"){ drawFoe(o, x); continue; }
     if(o.k === "hint"){ drawHint(o, x); continue; }
-    if(o.k === "gate"){ drawGate(o, x); continue; }
+    if(o.k === "gate") continue;              // 門は子のあとに描く（手前の柱で子が隠れて、くぐって見える）
+    if(o.k === "wall"){ drawDeadEnd(o, x); continue; }
     if(o.k === "spike" && so && ready(so.spike1) && ready(so.spike3)){
       // ステージの障害物。当たり判定の箱の上に、高さをそろえて置く（横ははみ出してもよい）
       const im = o.w >= 45 ? so.spike3 : so.spike1;
@@ -4280,7 +4377,7 @@ function drawHUD(run){
   if(game.mode === "title" || game.mode === "dead" || game.mode === "clear") return;
   // 拾ったクリスタル
   ctx.textAlign = "left"; ctx.textBaseline = "top";
-  label(`💎 ${game.runGems}`, 12, 12, 17, "#2E7C9E");
+  label(`💎 ${game.runGems} / ${run.gemTotal}`, 12, 12, 17, game.runGems >= run.gemTotal && run.gemTotal > 0 ? "#C98016" : "#2E7C9E");
   const m = run.cam / PX_PER_M;
   const roomy = bandTop > 110;
   const y = roomy ? bandTop - 96 : 12;
@@ -4423,6 +4520,7 @@ function frame(now){
     drawObstacles(run);
     drawGems(run);
     drawSlime(run);
+    for(const o of run.obs) if(o.k === "gate"){ const x = o.x - run.cam; if(x > -140 && x < W + 60) drawGate(o, x); }
     drawSlash(dt);
   }
   drawParticles(dt);
