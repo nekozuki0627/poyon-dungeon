@@ -366,6 +366,18 @@ body.cinema #adbar, body.cinema #mute{display:none}
   overflow:hidden;                     /* 本物の広告が入っても、帯より高くならないように */
 }
 #adbar ins.adsbygoogle{max-height:56px}
+/* けもの第3段階からの攻撃ボタン。右下の、親指がとどく所 */
+#atkBtn{
+  position:fixed;right:max(14px, env(safe-area-inset-right));bottom:calc(56px + env(safe-area-inset-bottom) + 18px);
+  width:84px;height:84px;border-radius:50%;z-index:6;
+  border:3px solid #594236;background:radial-gradient(circle at 35% 30%, #FFB27A, #E86A2F);
+  color:#fff;font-size:15px;font-weight:900;letter-spacing:.06em;text-shadow:0 2px 0 rgba(89,66,54,.55);
+  box-shadow:0 5px 0 rgba(89,66,54,.35);touch-action:none;user-select:none;-webkit-user-select:none;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
+}
+#atkBtn .ic{font-size:30px;line-height:1}
+#atkBtn:active,#atkBtn.on{transform:translateY(3px);box-shadow:0 2px 0 rgba(89,66,54,.35)}
+body.cinema #atkBtn{display:none}
 #mute{
   position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:50%;
   border:2px solid #594236;background:rgba(255,255,255,.8);color:var(--ink);font-size:20px;
@@ -570,6 +582,7 @@ body.cinema #adbar, body.cinema #mute{display:none}
 </div>
 
 <button id="mute" aria-label="音のオン・オフ">🔊</button>
+<button id="atkBtn" class="hide" aria-label="こうげき"><span class="ic">🐾</span>こうげき</button>
 
 <!-- 画面下にいつも空けておく広告の場所。公開後にここへ広告を入れる -->
 <div id="adbar"><span>広告スペース</span></div>
@@ -683,6 +696,27 @@ const PLAT_CHUNKS = [
   {tier:3, items:[{k:"plat", h:40, w:70},{k:"plat", h:78, w:70, glue:true},{k:"plat", h:110, w:100, glue:true}]}, // 3段
 ];
 const PLAT_STAGES = [2];   // 台が出るのは第2段階のダンジョン
+
+/* 第3段階からの、系統ごとの仕掛け（ゆま 9/18）
+   けもの：前に立ちはだかる敵。天井まで届く大きさなので跳んでも越えられない。攻撃ボタンでやっつけて進む
+   ヒトガタ：道の途中に「しるし」の看板。その先で道が上下ふたまた（上＝跳んでくぐる門／下＝そのまま走る門）。
+            看板と同じしるしの門をくぐらないと「ちがう道」で終わる
+   スライム：考え中（ゆま） */
+const FOE_CHUNKS = [
+  {tier:0, items:[{k:"foe"}]},
+  {tier:1, items:[{k:"foe"},{k:"spike", t:.55}]},
+  {tier:2, items:[{k:"spike"},{k:"foe", t:.6}]},
+  {tier:3, items:[{k:"foe"},{k:"foe", t:.65}]},
+];
+const FORK_CHUNKS = [
+  {tier:0, items:[{k:"fork"}]},
+];
+const SYMS = ["★", "♥", "◆", "♣", "●", "▲"];
+const FOE_W = 34;            // 敵の幅
+const ATK_RANGE = 96;        // 攻撃がとどく前の距離
+const ATK_TIME = 0.24, ATK_CD = 0.34;
+const FORK_LEAD = 1.7;       // 看板を見てから門に着くまでの秒数
+const FORK_Y = -78;          // これより上を通れば「上の門」
 const SIZE = { spike:{w:28,h:22}, spike2:{w:54,h:22}, batLow:{w:0,y:-20}, batHigh:{w:0,y:-72} };
 // 天井から下がる岩の下端。低すぎるとスライムの絵がめり込んで「当たっているのに死なない」ように見える
 const CEIL_BOTTOM = -70;
@@ -694,7 +728,8 @@ function makeRun(opt = {}){
   return {
     cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
     goalX: opt.goal ? GOAL_M * PX_PER_M + PX : 0, cleared: false, gemTotal: 0,
-    gems: [], gid: 0, gotQ: [], plats: [], platOn: opt.plat ?? false, magnet: opt.magnet ?? 0,
+    gems: [], gid: 0, gotQ: [], plats: [], platOn: opt.plat ?? false, foeOn: opt.foe ?? false, forkOn: opt.fork ?? false,
+    atk: 0, atkCd: 0, magnet: opt.magnet ?? 0,
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
     ev: [],   // 画面側に伝える出来事（着地・ジャンプなど）
@@ -719,7 +754,17 @@ function placeChunk(run, chunk, x0, t0){
     }else{
       x = end + (it.t || 0) * v;
     }
-    if(it.k === "plat"){
+    if(it.k === "foe"){
+      run.obs.push({k:"foe", x, w:FOE_W, alive:true}); end = x + FOE_W;
+    }else if(it.k === "fork"){
+      // 看板 → FORK_LEAD 秒後に門。正しい門は上か下かランダム
+      const sym = SYMS[Math.floor(Math.random() * SYMS.length)];
+      let other = sym; while(other === sym) other = SYMS[Math.floor(Math.random() * SYMS.length)];
+      const gx = x + FORK_LEAD * v;
+      run.obs.push({k:"hint", x, sym});
+      run.obs.push({k:"gate", x:gx, w:24, sym, other, upOk: Math.random() < .5, passed:false});
+      end = gx + 24;
+    }else if(it.k === "plat"){
       run.plats.push({x0:x, x1:x + it.w, h:it.h}); end = x + it.w;
     }else if(it.k === "pit"){
       const w = Math.round(it.wr * reach(v));
@@ -752,6 +797,8 @@ function generate(run){
     const pool = [];
     CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 3 : 1; for(let i=0;i<w;i++) pool.push(c); } });
     if(run.platOn) PLAT_CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 4 : 2; for(let i=0;i<w;i++) pool.push(c); } });
+    if(run.foeOn)  FOE_CHUNKS.forEach(c =>  { if(c.tier <= tier){ const w = c.tier === tier ? 4 : 2; for(let i=0;i<w;i++) pool.push(c); } });
+    if(run.forkOn) FORK_CHUNKS.forEach(c => { for(let i=0;i<5;i++) pool.push(c); });
     const np = run.plats.length;
     const chunk = pool[Math.floor(Math.random() * pool.length)];
     const end = placeChunk(run, chunk, run.nextX, run.tAt);
@@ -763,13 +810,14 @@ function generate(run){
     // クリスタルは「跳べば通る道すじ」に置く。拾うために無理をさせない
     const r = Math.random();
     const newPlats = run.plats.slice(np);
+    const special = chunk.items.some(it => it.k === "fork" || it.k === "foe");
     if(newPlats.length && r < 0.75){
       // 台の上を走れば取れる位置に、横一列
       const top = newPlats.reduce((a, b) => b.h > a.h ? b : a);
       const gid = ++run.gid, cx = (top.x0 + top.x1) / 2;
       for(let i = -1; i <= 1; i++) run.gems.push({ x: cx + i * 22, y: -top.h - R - 6, got: false, gid, set: 3 });
       run.gemTotal += 3;
-    }else if(newPlats.length){
+    }else if(newPlats.length || special){
       // なし
     }else if(r < 0.60){
       const mid = (run.nextX + end) / 2;
@@ -796,6 +844,11 @@ function generate(run){
 
 const inPit = (run, wx) => run.pits.some(p => wx > p.x0 && wx < p.x1);
 
+function tryAttack(run){
+  if(!run.foeOn || run.P.dead || run.atkCd > 0) return false;
+  run.atk = ATK_TIME; run.atkCd = ATK_CD; run.ev.push("atk");
+  return true;
+}
 function tryJump(run){
   const P = run.P;
   if(P.dead || P.fallen) return 0;
@@ -835,7 +888,9 @@ function stepRun(run, dt){
   const P = run.P;
   if(P.dead) return;
   if(run.inv > 0) run.inv -= dt;
+  if(run.atkCd > 0) run.atkCd -= dt;
   const safe = run.inv > 0;        // 復活直後は当たらない
+  const prevWx = run.cam + PX;
   const m = run.cam / PX_PER_M;
   run.v = run.fixedV ?? speedFor(m);
   run.cam += run.v * dt;
@@ -876,6 +931,19 @@ function stepRun(run, dt){
 
   const hr = R * 0.78;   // 当たり判定は見た目より少し小さく（理不尽に感じさせない）
   for(const o of run.obs) if(o.k === "bat") o.bx = batX(run, o, wx);
+  // 攻撃：前 ATK_RANGE までの敵をやっつける
+  if(run.atk > 0){
+    run.atk -= dt;
+    for(const o of run.obs) if(o.k === "foe" && o.alive && o.x - wx < ATK_RANGE && o.x + o.w > wx - 6){ o.alive = false; o.killT = 0; run.ev.push("kill"); }
+  }
+  // 門：通った高さで、上の門か下の門かを決める
+  for(const o of run.obs) if(o.k === "gate" && !o.passed && prevWx < o.x && wx >= o.x){
+    o.passed = true;
+    const up = P.y < FORK_Y;
+    o.took = up ? "up" : "down";
+    if(up !== o.upOk && !safe){ P.dead = "wrong"; return; }
+    run.ev.push("rightway");
+  }
   if(safe) return;
   for(const q of run.plats){
     if(q.x0 > wx + 40 || q.x1 < wx - 40) continue;
@@ -888,6 +956,8 @@ function stepRun(run, dt){
       if(circleRect(wx, P.y, hr, o.x + 5, -o.h + 7, o.x + o.w - 5, 0)){ P.dead = "spike"; return; }
     }else if(o.k === "ceil"){
       if(circleRect(wx, P.y, hr, o.x, CEIL - 50, o.x + o.w, CEIL_BOTTOM)){ P.dead = "ceil"; return; }
+    }else if(o.k === "foe"){
+      if(o.alive && circleRect(wx, P.y, hr, o.x + 4, CEIL - 50, o.x + o.w - 4, 0)){ P.dead = "foe"; return; }
     }else if(o.k === "bat"){
       const by = o.y + Math.sin(o.x * 0.05) * 6;
       const dx = wx - o.bx, dy = P.y - by;
@@ -1338,7 +1408,7 @@ const canEvolve = () => pet.stage < 5 && pet.gems >= EVO_COST[pet.stage + 1] && 
 
 const game = {
   mode: "title", run: null, best: store.get("poyon_best_m", 0), prevBest: 0,
-  ui: null, runGems: 0, evoT: 0, petHappy: 0,
+  ui: null, runGems: 0, evoT: 0, petHappy: 0, petStroke: 0, petDown: null, hearts: [],
   time: 0, parts: [], pops: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
   combo: 0, bestCombo: 0, bonus: 0, perfects: 0, gsets: {}, revived: false, bestDist: store.get("poyon_bestdist_m", 0),
   lastDeath: store.get("poyon_lastdeath_m", 0), passedDeath: false,
@@ -1665,6 +1735,9 @@ function musicSchedule(){
   }
 }
 const SFX = {
+  purr(){ tone(520 + Math.random() * 80, .12, "sine", .05, 1.2); },
+  atk(){  tone(260, .09, "sawtooth", .08, .5); setTimeout(()=>tone(520, .06, "square", .05, .6), 30); },
+  kill(){ tone(180, .18, "square", .1, .4); setTimeout(()=>tone(880, .14, "triangle", .09, 1.5), 60); },
   jump(){  tone(420, .14, "sine", .13, 1.9); },
   jump2(){ tone(620, .16, "sine", .12, 1.7); },
   land(){  tone(180, .07, "sine", .08, .6); },
@@ -1688,6 +1761,7 @@ function burst(x, y, n, col, spd, up = 0){
 const $ = id => document.getElementById(id);
 function showTitle(){
   game.mode = "title"; game.ui = null;
+  $("atkBtn").classList.add("hide");
   $("titleView").classList.remove("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
   $("evoView").classList.add("hide"); $("nameView").classList.add("hide"); $("rGrow").classList.add("hide");
   if(game.best > 0){ $("titleBest").textContent = `ベスト ${Math.floor(game.best)}　（いちばん深く 地下${floorOf(game.bestDist)}階）`; $("titleBest").classList.remove("hide"); }
@@ -1711,7 +1785,10 @@ function refreshHome(){
 function start(){
   game.mode = "play"; game.ui = null;
   game.runGems = 0;
-  game.run = makeRun({ magnet: perk("magnet"), goal: true, plat: PLAT_STAGES.indexOf(pet.stage) >= 0 });
+  game.run = makeRun({ magnet: perk("magnet"), goal: true, plat: PLAT_STAGES.indexOf(pet.stage) >= 0,
+                       foe: pet.line === "beast" && pet.stage >= 3,
+                       fork: pet.line.indexOf("human") === 0 && pet.stage >= 3 });
+  $("atkBtn").classList.toggle("hide", !game.run.foeOn);
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
   game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.perfects = 0; game.gsets = {}; game.revived = false; game.passedDeath = false;
   musicStart();
@@ -1722,6 +1799,7 @@ const floorOf = m => Math.min(GOAL_FLOOR, Math.floor(m / FLOOR_M) + 1);
 
 function die(){
   const run = game.run, m = run.cam / PX_PER_M;
+  $("atkBtn").classList.add("hide");
   const score = Math.floor(m) + game.bonus;
   // 拾ったクリスタルを持ち帰る（系統によっては多めに持てる）
   const picked = Math.round(game.runGems * perk("gem") * famBonus());
@@ -1769,6 +1847,7 @@ function die(){
    ノーミス（復活なし）で、その回に出たクリスタルをぜんぶ拾えていたら perfect。
    perfect はスライムの「むずかしい」に進む条件のひとつ */
 function clearRun(){
+  $("atkBtn").classList.add("hide");
   const run = game.run, m = GOAL_M;
   const score = m + game.bonus;
   const picked = Math.round(game.runGems * perk("gem") * famBonus());
@@ -1866,6 +1945,7 @@ function revive(){
   run.inv = 1.6;                    // しばらく無敵
   game.combo = 0; game.parts = []; game.pops = [];
   game.shake = 0; game.mode = "play";
+  $("atkBtn").classList.toggle("hide", !run.foeOn);
   burst(PX, GY, 18, "#FFD13B", 200, 60);
   SFX.floor();
   musicStart();
@@ -2476,10 +2556,10 @@ function onPress(e){
   if(e && e.target && e.target.id === "reviveBtn") return;
   if(game.mode === "ad") return;
   if(e && e.cancelable) e.preventDefault();
-  // おうちでは、なでると喜ぶ（ボタンを押したときは start / そだてる が動く）
+  // おうちでは、その子にさわったときだけ反応する（ゆま 9/18：スライム以外をさわっても跳ねていた）。
+  // ちょんと押す＝ぴょんと跳ねる／指でなでる＝とろけて、ハートがふわふわ（なでたかどうかは指を動かした量で決める）
   if(game.mode === "title"){
-    game.petHappy = 1.0; SFX.pet();
-    burst(W / 2, GY - 60, 7, "#FF8FB0", 120, 70);
+    if(e && onPet(e)) game.petDown = { x: e.clientX, y: e.clientY, moved: 0, heartT: 0 };
     return;
   }
   if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); musicStart(); return; }
@@ -2490,6 +2570,34 @@ function onPress(e){
   if(game.mode === "play") tryJump(game.run);
 }
 window.addEventListener("pointerdown", onPress, {passive:false});
+// おうちの子にさわっているあいだ
+function toGame(e){
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top) / scale };
+}
+function onPet(e){
+  const q = toGame(e), tall = isHuman(pet) ? 130 : pet.stage >= 4 ? 100 : 86;
+  return Math.abs(q.x - W / 2) < 58 && q.y > GY - tall && q.y < GY + 14;
+}
+window.addEventListener("pointermove", e => {
+  const d = game.petDown;
+  if(!d || game.mode !== "title") return;
+  d.moved += Math.hypot(e.clientX - d.x, e.clientY - d.y); d.x = e.clientX; d.y = e.clientY;
+  if(d.moved > 18 && onPet(e)){
+    game.petStroke = 0.5;
+    d.heartT -= 1 / 60;
+    if(d.heartT <= 0){ d.heartT = 0.16; game.hearts.push({ x: W / 2 + (Math.random() - .5) * 60, y: GY - 60, t: 0, s: 12 + Math.random() * 8 }); SFX.purr(); }
+  }
+});
+window.addEventListener("pointerup", () => {
+  const d = game.petDown; game.petDown = null;
+  if(!d || game.mode !== "title") return;
+  if(d.moved <= 18){
+    // ちょん：ぴょんと跳ねて、大きなハートをひとつ
+    game.petHappy = 1.0; SFX.pet();
+    game.hearts.push({ x: W / 2, y: GY - 70, t: 0, s: 26 });
+  }
+});
 window.addEventListener("keydown", e => { if(e.code === "Space" || e.code === "ArrowUp" || e.code === "Enter"){ e.preventDefault(); if(!e.repeat) onPress(null); } });
 document.addEventListener("visibilitychange", () => {
   if(document.hidden && game.mode === "play"){ game.mode = "paused"; $("pauseView").classList.remove("hide"); musicStop(); }
@@ -2500,6 +2608,13 @@ $("reviveBtn").addEventListener("pointerdown", e => {
   if(noAds()){ $("resultView").classList.add("hide"); revive(); return; }
   game.mode = "ad";
   showRewardAd(revive);
+});
+$("atkBtn").addEventListener("pointerdown", e => {
+  e.stopPropagation(); e.preventDefault();
+  if(game.mode === "play" && game.run) tryAttack(game.run);
+});
+window.addEventListener("keydown", e => {
+  if((e.code === "KeyX" || e.code === "KeyZ") && game.mode === "play" && game.run){ e.preventDefault(); tryAttack(game.run); }
 });
 function tapBtn(id, fn){
   $(id).addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); fn(); });
@@ -3174,12 +3289,81 @@ function drawPlats(run){
     }
   }
 }
+/* ---- 第3段階からの仕掛けの絵（Gemini）----
+   けもの：assets/stage_obj/beast_{3,4,5}_foe.png ／ ヒトガタ：human_{3,4,5}_gate.png（門のてっぺんの丸い板に、しるしを重ねる） */
+const gimImg = {};
+function gim(name){
+  const k = stageKey(); if(!k) return null;
+  const key = `${k}_${name}`;
+  if(!gimImg[key]){ gimImg[key] = new Image(); gimImg[key].src = `assets/stage_obj/${key}.png`; }
+  return ready(gimImg[key]) ? gimImg[key] : null;
+}
+function drawFoe(o, x){
+  const im = gim("foe");
+  const h = (GY - bandTop) * 0.92;     // 天井近くまである大きな敵＝跳んでも越えられない、と見て分かるように
+  const cx = x + o.w / 2;
+  if(!o.alive){
+    // やっつけたら、光って上へ消えていく
+    o.killT = (o.killT || 0) + 1 / 60;
+    const k = Math.min(1, o.killT / 0.5);
+    if(k >= 1) return;
+    ctx.save(); ctx.globalAlpha = 1 - k; ctx.filter = `brightness(${1 + k * 1.5})`;
+    if(im){ const w = h * im.naturalWidth / im.naturalHeight; ctx.drawImage(im, cx - w / 2, GY - h - k * 40, w, h); }
+    ctx.restore();
+    return;
+  }
+  const sway = Math.sin(game.time * 2 + o.x) * 2;
+  ctx.fillStyle = "rgba(60,36,28,.25)"; ctx.beginPath(); ctx.ellipse(cx, GY, 26, 5, 0, 0, 7); ctx.fill();
+  if(im){
+    const w = h * im.naturalWidth / im.naturalHeight;
+    ctx.save(); ctx.translate(cx, GY); ctx.rotate(sway * 0.01); ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore();
+  }else{
+    ctx.fillStyle = "#6E5080"; ctx.fillRect(x, GY - h, o.w, h);
+  }
+}
+function symText(sym, cx, cy, size, col){
+  ctx.font = `900 ${size}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.strokeText(sym + "\uFE0E", cx, cy + 1);
+  ctx.fillStyle = col || COL.ink; ctx.fillText(sym + "\uFE0E", cx, cy + 1);
+}
+function drawHint(o, x){
+  // 看板（Gemini）に、覚えるしるしを大きく
+  const h = 64, cx = x;
+  if(ready(IMG.sign)){ const w = h * IMG.sign.naturalWidth / IMG.sign.naturalHeight; ctx.drawImage(IMG.sign, cx - w / 2, GY - h + 2, w, h); }
+  const bob = Math.sin(game.time * 4) * 2;
+  // 頭の上にもふきだしで出す（看板の字が小さくても見える）
+  ctx.fillStyle = "rgba(255,248,238,.95)"; ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(cx, GY - h - 26 + bob, 20, 0, 7); ctx.fill(); ctx.stroke();
+  symText(o.sym, cx, GY - h - 26 + bob, 24, "#C0506A");
+}
+function drawGate(o, x){
+  const im = gim("gate");
+  const cx = x + o.w / 2;
+  const lowH = -FORK_Y, upTop = bandTop + 6, upH = (GY + FORK_Y) - upTop;
+  const upSym = o.upOk ? o.sym : o.other, lowSym = o.upOk ? o.other : o.sym;
+  const draw = (top, hh, sym) => {
+    if(im){
+      const w = hh * im.naturalWidth / im.naturalHeight;
+      ctx.drawImage(im, cx - w / 2, top, w, hh);
+      // 丸い板（絵の上から9%あたり）にしるし
+      symText(sym, cx, top + hh * 0.085, Math.max(18, w * 0.34), "#594236");
+    }else{
+      ctx.strokeStyle = COL.line; ctx.lineWidth = 4; ctx.strokeRect(cx - 20, top, 40, hh);
+      symText(sym, cx, top + 14, 18);
+    }
+  };
+  draw(GY - lowH, lowH, lowSym);
+  draw(upTop, upH, upSym);
+}
 function drawObstacles(run){
   const cam = run.cam;
   for(const o of run.obs){
     const x = (o.k === "bat" ? o.bx : o.x) - cam;
     if(x < -140 || x > W + 60) continue;
     const so = curObj();
+    if(o.k === "foe"){ drawFoe(o, x); continue; }
+    if(o.k === "hint"){ drawHint(o, x); continue; }
+    if(o.k === "gate"){ drawGate(o, x); continue; }
     if(o.k === "spike" && so && ready(so.spike1) && ready(so.spike3)){
       // ステージの障害物。当たり判定の箱の上に、高さをそろえて置く（横ははみ出してもよい）
       const im = o.w >= 45 ? so.spike3 : so.spike1;
@@ -3603,6 +3787,23 @@ function runFrame(P){
   return fr[i];
 }
 
+// 攻撃の軌跡。つめで引っかくような3本の光の弧（エフェクトなので図形で描く）
+function drawSlash(dt){
+  if(!(game.slashT > 0)) return;
+  game.slashT -= dt;
+  const k = 1 - Math.max(0, game.slashT) / 0.22;
+  const P = game.run.P, cx = PX + 34, cy = GY + P.y;
+  ctx.save();
+  ctx.globalAlpha = 1 - k * 0.8;
+  ctx.strokeStyle = "#FFF3C4"; ctx.lineCap = "round";
+  for(let i = -1; i <= 1; i++){
+    ctx.lineWidth = 5 - Math.abs(i) * 1.5;
+    ctx.beginPath();
+    ctx.arc(cx - 10, cy + i * 10, 34 + k * 14, -1.1, -1.1 + 2.2 * Math.min(1, k * 1.6));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawSlime(run){
   const P = run.P;
   if(game.mode === "dead") return;
@@ -3817,17 +4018,37 @@ function drawHome(){
 
   // ふだんはのんびり跳ねている。なでると大きくはずむ
   const happy = Math.max(0, game.petHappy);
+  const stroke = Math.max(0, game.petStroke) > 0;
   const sp = happy > 0 ? 0.20 : 0.42;
   const k = Math.abs(Math.sin(game.time / sp * Math.PI));
-  const hop = -k * (happy > 0 ? 26 : 10);
-  const sx = 1 + (1 - k) * 0.15, sy = 1 - (1 - k) * 0.15;
+  let hop = -k * (happy > 0 ? 26 : 10);
+  let sx = 1 + (1 - k) * 0.15, sy = 1 - (1 - k) * 0.15;
+  if(stroke){
+    // なでられている：跳ねずに、うっとりと横に広がって、左右にゆらゆら
+    hop = 0;
+    const w = Math.sin(game.time * 9);
+    sx = 1.14 + w * 0.04; sy = 0.88 - w * 0.03;
+  }
   if(isHuman(pet)){
     // 人に近い姿は、潰れずに ぴょこっと跳ねる
-    drawCreature(ctx, pet, cx, baseY - 2 + hop * 0.7, 62, { sx: 1, sy: 1 + Math.sin(game.time * 2.2) * 0.01, cap: 3.2 });
+    drawCreature(ctx, pet, cx + (stroke ? Math.sin(game.time * 6) * 3 : 0), baseY - 2 + (stroke ? 0 : hop * 0.7), 62, { sx: 1, sy: 1 + Math.sin(game.time * 2.2) * 0.01, cap: 3.2 });
   }else{
     // 絵の姿は余白があるぶん浮いて見えるので、少し沈める
     drawCreature(ctx, pet, cx, baseY + (pet.stage >= 2 ? 3 : -6) + hop, 62, { im: IMG.s1, sx, sy, cap: 3.2 });
   }
+
+  // ハート
+  for(const h of game.hearts){
+    h.t += 1 / 60;
+    const a = Math.max(0, 1 - h.t / 1.1);
+    ctx.globalAlpha = a;
+    ctx.font = `900 ${h.s}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)";
+    const y = h.y - h.t * 46, x = h.x + Math.sin(h.t * 5 + h.s) * 6;
+    ctx.strokeText("\u2665\uFE0E", x, y); ctx.fillStyle = "#FF6F9C"; ctx.fillText("\u2665\uFE0E", x, y);
+  }
+  ctx.globalAlpha = 1;
+  game.hearts = game.hearts.filter(h => h.t < 1.1);
 
   if(game.evoT > 0){
     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.85, game.evoT * 0.8)})`;
@@ -3951,6 +4172,19 @@ function frame(now){
           if(e === "jump"){ SFX.jump(); burst(PX, GY, 6, "rgba(255,255,255,.85)", 90); }
           else { SFX.jump2(); burst(PX, GY + run.P.y + R, 10, "#B8F7F4", 150); }
         }
+        else if(e === "atk"){
+          SFX.atk(); game.slashT = 0.22;
+          $("atkBtn").classList.add("on"); setTimeout(() => $("atkBtn").classList.remove("on"), 90);
+        }
+        else if(e === "kill"){
+          SFX.kill(); game.shake = Math.max(game.shake, 5);
+          burst(PX + 70, GY - 40, 22, "#FFD13B", 240, 60);
+          game.pops.push({ text: "やっつけた！", col: "#E86A2F", t: 0 });
+        }
+        else if(e === "rightway"){
+          SFX.gem();
+          game.pops.push({ text: "こっちの道！", col: "#3FA9E0", t: 0 });
+        }
         else if(e === "land"){ SFX.land(); game.squashT = 0.12; burst(PX, GY, 5, "rgba(255,255,255,.8)", 70); }
         else if(e === "gem"){
           game.runGems++; SFX.gem();
@@ -3960,7 +4194,10 @@ function frame(now){
       run.ev.length = 0;
       gemChain(run);
       if(run.cleared){ clearRun(); break; }
-      if(run.P.dead){ die(); break; }
+      if(run.P.dead){
+        if(run.P.dead === "wrong") game.pops.push({ text: "ちがう道だった…", col: "#C0506A", t: 0 });
+        die(); break;
+      }
     }
     const md = run.cam / PX_PER_M;
     if(game.lastDeath > 3 && !game.passedDeath && md > game.lastDeath){
@@ -3975,6 +4212,7 @@ function frame(now){
   }
   if(game.floorFlash > 0) game.floorFlash -= dt;
   if(game.petHappy > 0) game.petHappy -= dt;
+  if(game.petStroke > 0) game.petStroke -= dt;
   if(game.evoT > 0) game.evoT -= dt * 1.6;
   if(game.squashT > 0) game.squashT -= dt;
   if(game.shake > 0) game.shake = Math.max(0, game.shake - dt * 40);
@@ -3997,6 +4235,7 @@ function frame(now){
     drawObstacles(run);
     drawGems(run);
     drawSlime(run);
+    drawSlash(dt);
   }
   drawParticles(dt);
   drawPops(dt);
