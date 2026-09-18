@@ -59,12 +59,22 @@ body{font-family:"Hiragino Maru Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,s
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
   padding:6px 16px calc(56px + 26px + env(safe-area-inset-bottom));
 }
+/* スマホ：名前の札は、その子の頭の上に置く（下にあると、縦の短い画面で子にかぶっていた。ゆま 9/18）。
+   頭の高さ（--petHead）は canvas 側から毎フレームもらう */
+html:not(.wide) #petBox{
+  position:fixed;left:0;right:0;top:calc(var(--petHead, 45%) - 66px);z-index:3;
+  display:flex;flex-direction:column;align-items:center;pointer-events:none;
+}
+html:not(.wide) #petBox .petname{padding:4px 14px;font-size:16px}
+html:not(.wide) #petBox .pettitle{margin-top:3px}
 .petname{
   pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
   background:rgba(255,255,255,.9);border:3px solid #594236;border-radius:99px;
   padding:6px 16px;font-size:18px;font-weight:900;color:#594236;box-shadow:0 4px 0 rgba(89,66,54,.22);
 }
 .petname small{font-size:11px;color:var(--dim);font-weight:800}
+.pettitle .love{color:#FFC2D6}
+html.wide #titleView .pettitle .love{color:#D0507A}
 .pettitle{margin-top:5px;font-size:13px;font-weight:800;color:#F3E6FF;text-shadow:0 2px 0 rgba(89,66,54,.55)}
 .gemline{
   margin-top:7px;display:inline-block;background:rgba(255,255,255,.88);border-radius:99px;
@@ -323,6 +333,18 @@ body.cinema #adbar, body.cinema #mute{display:none}
 .howto{margin-top:20px;font-size:13px;line-height:1.9;color:#6B5B90;background:rgba(255,255,255,.62);border-radius:16px;padding:10px 16px}
 .howto b{color:#594236}
 
+/* ショップ */
+.st-tabs{display:flex;gap:6px;justify-content:center;margin:10px 0 8px}
+.st-tab{border:2px solid #594236;border-radius:99px;padding:6px 18px;font-size:14px;font-weight:900;color:#594236;background:#fff;cursor:pointer}
+.st-tab.on{background:linear-gradient(180deg,#FFE9A8,#F5C24A)}
+.st-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.st-item{border:2px solid #594236;border-radius:16px;background:#fff;padding:8px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+.st-item img{width:64px;height:64px;object-fit:contain}
+.st-item .nm{font-size:13px;font-weight:900;color:#594236}
+.st-item .pr{font-size:13px;font-weight:900;color:#2E7C9E}
+.st-item.off{opacity:.45}
+.st-item.have{background:#F3ECFF}
+.st-item .have-tag{font-size:11px;font-weight:900;color:#8A79B5}
 .card{
   background:var(--panel);border:3px solid #594236;border-radius:24px;
   padding:22px 26px 20px;min-width:min(310px,86vw);box-shadow:0 12px 0 rgba(89,66,54,.25);
@@ -416,8 +438,10 @@ body.cinema #atkBtn{display:none}
     <div class="best-line hide" id="titleBest"></div>
   </div>
   <div class="home-bottom">
-    <div class="petname" id="petName">ぷに <small>✎</small></div>
-    <div class="pettitle" id="petTitle"></div>
+    <div id="petBox">
+      <div class="petname" id="petName">ぷに <small>✎</small></div>
+      <div class="pettitle" id="petTitle"></div>
+    </div>
     <div class="gemline">💎 もちもの <b id="homeGems">0</b></div>
     <button class="btn go" id="goBtn">▶　もぐる</button>
     <div class="row">
@@ -455,6 +479,17 @@ body.cinema #atkBtn{display:none}
       <div class="adcount"><span id="adCount">5</span></div>
     </div>
     <div class="r-gap">見終わると その場から復活できる</div>
+  </div>
+</div>
+
+<div class="overlay hide" id="storeView">
+  <div class="card" style="min-width:min(336px,93vw);max-width:420px">
+    <div class="r-label">ショップ</div>
+    <div class="gemline">💎 <b id="storeGems">0</b></div>
+    <div class="st-tabs"><button class="st-tab on" id="stTabFood">たべもの</button><button class="st-tab" id="stTabToy">おもちゃ</button></div>
+    <div class="st-list" id="storeList"></div>
+    <div class="r-gap" id="storeNote">たべものは、買うとすぐに あげられます</div>
+    <button class="btn sub" id="storeBack" style="margin-top:10px">もどる</button>
   </div>
 </div>
 
@@ -1391,6 +1426,31 @@ function savePet(){
   store.set("poyon_pet_stage", pet.stage); store.set("poyon_gems", pet.gems);
   store.set("poyon_total", pet.total);
 }
+/* ---- ショップ（ゆま 9/18）----
+   クリスタルで、たべもの（その場であげる）と おもちゃ（小屋に置いておける）を買う。
+   あげると「なかよし」がふえる。遊びの難しさには効かない（技量で深さが決まる芯を守る）。
+   絵は Gemini：assets/shop/{id}.png ／ 看板は assets/shop/sign.png */
+const SHOP_FOOD = [
+  { id: "candy", name: "ほしのキャンディ", price: 8,  love: 1, say: "{n}は、ほっぺの中でころころ転がしている。" },
+  { id: "soup",  name: "きのこスープ",     price: 15, love: 2, say: "{n}は、ふうふうしてから、ひと口ずつ飲んだ。" },
+  { id: "jelly", name: "にじいろゼリー",   price: 25, love: 3, say: "{n}の体が、ほんのり虹色に光った。" },
+  { id: "cake",  name: "クリスタルケーキ", price: 45, love: 5, say: "{n}は、最後のひとかけらまで大事に食べた。" },
+];
+const SHOP_TOY = [
+  { id: "ball",     name: "ぽよぽよボール", price: 30, spot: -1.0, say: "{n}は、ボールと同じ高さまで跳ねてみせた。" },
+  { id: "windmill", name: "かざぐるま",     price: 60, spot:  1.0, say: "{n}が息をふきかけると、かざぐるまがくるくる回った。" },
+  { id: "blocks",   name: "つみき",         price: 50, spot: -1.7, say: "{n}は、つみきをひとつだけ、そっと積んだ。" },
+  { id: "plush",    name: "ぬいぐるみ",     price: 80, spot:  1.7, say: "{n}は、ぬいぐるみにぴったりくっついて離れない。" },
+];
+const shopImg = {};
+function shopIm(id){
+  if(!shopImg[id]){ shopImg[id] = new Image(); shopImg[id].src = `assets/shop/${id}.png`; }
+  return ready(shopImg[id]) ? shopImg[id] : null;
+}
+pet.love = store.get("poyon_love", 0);
+pet.toys = store.get("poyon_toys", []);
+function saveLove(){ store.set("poyon_love", pet.love); store.set("poyon_toys", pet.toys); }
+const loveLv = () => Math.floor(pet.love / 10) + 1;
 const formName = f => f.stage === 1 ? "ぽよん" : LINE_INFO[f.line].names[f.stage - 1];
 const bodyCol  = f => LINE_INFO[f.line].body[f.stage - 1];
 // いまの段階で効いている力。第1段階は何もなし
@@ -1408,7 +1468,7 @@ const canEvolve = () => pet.stage < 5 && pet.gems >= EVO_COST[pet.stage + 1] && 
 
 const game = {
   mode: "title", run: null, best: store.get("poyon_best_m", 0), prevBest: 0,
-  ui: null, runGems: 0, evoT: 0, petHappy: 0, petStroke: 0, petDown: null, hearts: [],
+  ui: null, runGems: 0, evoT: 0, petHappy: 0, petStroke: 0, petDown: null, hearts: [], homeMsg: null,
   time: 0, parts: [], pops: [], shake: 0, squashT: 0, deadAt: 0, lastFloor: 1, floorFlash: 0,
   combo: 0, bestCombo: 0, bonus: 0, perfects: 0, gsets: {}, revived: false, bestDist: store.get("poyon_bestdist_m", 0),
   lastDeath: store.get("poyon_lastdeath_m", 0), passedDeath: false,
@@ -1772,7 +1832,7 @@ function showTitle(){
 // おうちの表示を今の状態に合わせる
 function refreshHome(){
   $("petName").innerHTML = `${pet.name} <small>✎</small>`;
-  $("petTitle").innerHTML = `${formName(pet)}　<span class="stars">${"★".repeat(pet.stage)}${"☆".repeat(5 - pet.stage)}</span>`;
+  $("petTitle").innerHTML = `${formName(pet)}　<span class="stars">${"★".repeat(pet.stage)}${"☆".repeat(5 - pet.stage)}</span>　<span class="love">♥ なかよし ${loveLv()}</span>`;
   $("homeGems").innerHTML = pet.gems +
     (family.length ? `<small>いえに ${family.length}ひき ＋${Math.round((famBonus() - 1) * 100)}%</small>` : "");
   $("growBadge").classList.toggle("hide", !canEvolve());
@@ -2544,6 +2604,7 @@ function newChild(){
   pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
   pet.line = "slime"; pet.stage = 1;
   prog.played = {}; saveProg();   // 新しい子は、自分でもぐってから進化する
+  pet.love = 0; saveLove();        // なかよしは、新しい子と一からつくる（おもちゃは小屋のものなので残す）
   savePet(); refreshHome();
   game.ui = null; $("retireView").classList.add("hide");
   askIntroName();
@@ -2559,7 +2620,10 @@ function onPress(e){
   // おうちでは、その子にさわったときだけ反応する（ゆま 9/18：スライム以外をさわっても跳ねていた）。
   // ちょんと押す＝ぴょんと跳ねる／指でなでる＝とろけて、ハートがふわふわ（なでたかどうかは指を動かした量で決める）
   if(game.mode === "title"){
-    if(e && onPet(e)) game.petDown = { x: e.clientX, y: e.clientY, moved: 0, heartT: 0 };
+    if(e && onPet(e)){ game.petDown = { x: e.clientX, y: e.clientY, moved: 0, heartT: 0 }; return; }
+    if(e && onShopSign(e)){ SFX.pet(); openStore(); return; }
+    const toy = e && onToy(e);
+    if(toy){ homeReact("toy", toy); return; }
     return;
   }
   if(game.mode === "paused"){ game.mode = "play"; $("pauseView").classList.add("hide"); musicStart(); return; }
@@ -2574,6 +2638,21 @@ window.addEventListener("pointerdown", onPress, {passive:false});
 function toGame(e){
   const r = cv.getBoundingClientRect();
   return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top) / scale };
+}
+// ショップの看板（右の壁に吊るしてある）とおもちゃの場所
+const SHOP_SIGN = { x: W - 58, y: 0, w: 84, h: 64 };   // y は描くときに決まる
+function onShopSign(e){
+  const q = toGame(e), sg = SHOP_SIGN;
+  return q.x > sg.x - sg.w / 2 && q.x < sg.x + sg.w / 2 && q.y > sg.y && q.y < sg.y + sg.h;
+}
+const toyX = it => W / 2 + it.spot * 62;
+function onToy(e){
+  const q = toGame(e);
+  for(const id of pet.toys){
+    const it = SHOP_TOY.find(t => t.id === id); if(!it) continue;
+    if(Math.abs(q.x - toyX(it)) < 26 && q.y > GY - 52 && q.y < GY + 10) return it;
+  }
+  return null;
 }
 function onPet(e){
   const q = toGame(e), tall = isHuman(pet) ? 130 : pet.stage >= 4 ? 100 : 86;
@@ -2616,12 +2695,58 @@ $("atkBtn").addEventListener("pointerdown", e => {
 window.addEventListener("keydown", e => {
   if((e.code === "KeyX" || e.code === "KeyZ") && game.mode === "play" && game.run){ e.preventDefault(); tryAttack(game.run); }
 });
+let storeTab = "food";
+function openStore(){
+  game.ui = "store";
+  $("storeView").classList.remove("hide");
+  renderStore();
+}
+function closeStore(){ game.ui = null; $("storeView").classList.add("hide"); }
+function renderStore(){
+  $("storeGems").textContent = pet.gems;
+  $("stTabFood").classList.toggle("on", storeTab === "food");
+  $("stTabToy").classList.toggle("on", storeTab === "toy");
+  $("storeNote").textContent = storeTab === "food" ? "たべものは、買うとすぐに あげられます" : "おもちゃは、小屋に置いておけます。小屋でさわると遊びます";
+  const box = $("storeList"); box.innerHTML = "";
+  for(const it of (storeTab === "food" ? SHOP_FOOD : SHOP_TOY)){
+    const have = storeTab === "toy" && pet.toys.indexOf(it.id) >= 0;
+    const ok = !have && pet.gems >= it.price;
+    const el = document.createElement("div");
+    el.className = "st-item" + (have ? " have" : ok ? "" : " off");
+    el.innerHTML = `<img src="assets/shop/${it.id}.png" alt=""><div class="nm">${it.name}</div>` +
+      (have ? `<div class="have-tag">小屋にあるよ</div>` : `<div class="pr">💎 ${it.price}</div>`);
+    el.addEventListener("pointerdown", e => {
+      e.stopPropagation(); e.preventDefault();
+      if(have || pet.gems < it.price) return;
+      pet.gems -= it.price; savePet();
+      if(storeTab === "food"){
+        pet.love += it.love; saveLove();
+        closeStore(); refreshHome();
+        homeReact("eat", it);
+      }else{
+        pet.toys.push(it.id); saveLove();
+        closeStore(); refreshHome();
+        homeReact("toy", it);
+      }
+    });
+    box.appendChild(el);
+  }
+}
+// おうちで、あげたもの・おもちゃへの反応（頭の上にふきだし）
+function homeReact(kind, it){
+  game.homeMsg = { text: it.say.replace(/\{n\}/g, pet.name), t: 0, t0: game.time, icon: it.id, kind };
+  game.petHappy = 1.4; SFX.pet();
+  for(let i = 0; i < 4; i++) game.hearts.push({ x: W / 2 + (i - 1.5) * 16, y: GY - 60, t: -i * 0.18, s: 16 + i * 2 });
+}
+$("stTabFood").addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); storeTab = "food"; renderStore(); });
+$("stTabToy").addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); storeTab = "toy"; renderStore(); });
 function tapBtn(id, fn){
   $(id).addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); fn(); });
 }
 tapBtn("goBtn",   () => { if(!game.ui) start(); });
 tapBtn("growBtn", () => { if(!game.ui) openEvo(); });
 tapBtn("evoBack", closeEvo);
+tapBtn("storeBack", closeStore);
 tapBtn("bookBtn", () => { if(!game.ui) openBook(); });
 tapBtn("zukanBtn", () => { if(!game.ui) openZukan(); });
 tapBtn("zukanBack", () => { game.ui = null; $("zukanView").classList.add("hide"); });
@@ -2820,11 +2945,12 @@ function leaveStart(){
 // 育てなおす：課金で買った救いの章と、音の設定だけ残して、ほかは消す
 function restartAll(){
   for(const k of ["poyon_pet_name", "poyon_pet_line", "poyon_pet_stage", "poyon_gems", "poyon_total",
-                  "poyon_family", "poyon_story", "poyon_best_m", "poyon_bestdist_m", "poyon_lastdeath_m", "poyon_intro_done", "poyon_prog"]){
+                  "poyon_family", "poyon_story", "poyon_best_m", "poyon_bestdist_m", "poyon_lastdeath_m", "poyon_intro_done", "poyon_prog",
+                  "poyon_love", "poyon_toys"]){
     try{ localStorage.removeItem(k); }catch(e){}
   }
   pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
-  pet.line = "slime"; pet.stage = 1; pet.gems = 0; pet.total = 0;
+  pet.line = "slime"; pet.stage = 1; pet.gems = 0; pet.total = 0; pet.love = 0; pet.toys = [];
   family.length = 0;
   story.slime = 1; story.beast = 1; story.human = 1; story.slime_hard = 1;
   prog.done = {}; prog.perfect = false; prog.seen = {}; prog.clears = 0; prog.played = {}; markSeen("slime", 1);
@@ -3710,11 +3836,13 @@ function drawCreature(g, f, cx, baseY, h, opt = {}){
     const cap = h * (opt.cap || 1.9) * SIZE_UP[f.stage - 1];   // 人に近い姿は背が高いので、おうちでは上限をゆるめる
     if(hh > cap){ w *= cap / hh; hh = cap; }
     g.drawImage(ev, cx - w * sx / 2, baseY - hh * sy, w * sx, hh * sy);
+    drawCreature.lastH = hh;
     return;
   }
   const H0 = h * SIZE_UP[f.stage - 1];
   const w0 = ready(im) ? im.naturalWidth / im.naturalHeight * H0 : H0;
   const w  = w0 * sx, hh = H0 * sy, top = baseY - hh;
+  drawCreature.lastH = H0;
   const P = { g, cx, top, w, hh, baseY, t, ink: COL.line, acc: LINE_INFO[f.line].acc, col: bodyCol(f) };
   const parts = LINE_PARTS[f.line][f.stage - 1];
   for(const k of parts) if(PART[k].back) PART[k].draw(P);
@@ -4016,6 +4144,32 @@ function drawHome(){
                  { im: IMG.s1, sx: 1 + (1 - k) * 0.1, sy: 1 - (1 - k) * 0.1, cap: 3.0 });
   });
 
+  // おもちゃ（床に置いてある）
+  for(const id of pet.toys){
+    const it = SHOP_TOY.find(t => t.id === id); const im = it && shopIm(id);
+    if(!im) continue;
+    const h = 42, w = h * im.naturalWidth / im.naturalHeight, x = toyX(it);
+    ctx.fillStyle = "rgba(60,36,28,.22)"; ctx.beginPath(); ctx.ellipse(x, GY + 1, w * .42, 4, 0, 0, 7); ctx.fill();
+    ctx.drawImage(im, x - w / 2, GY + 2 - h, w, h);
+  }
+  // ショップの看板（右の壁から吊るす）
+  {
+    const im = shopIm("sign");
+    SHOP_SIGN.y = GY - 190;
+    if(im){
+      const h = SHOP_SIGN.h, w = h * im.naturalWidth / im.naturalHeight, x = SHOP_SIGN.x;
+      const sw = Math.sin(game.time * 1.6) * 0.03;
+      ctx.save(); ctx.translate(x, SHOP_SIGN.y - 8); ctx.rotate(sw);
+      ctx.strokeStyle = "#8A6A40"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-w * .3, -40); ctx.lineTo(-w * .3, 10); ctx.moveTo(w * .3, -40); ctx.lineTo(w * .3, 10); ctx.stroke();
+      ctx.drawImage(im, -w / 2, 8, w, h);
+      ctx.font = "900 14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,248,230,.95)"; ctx.strokeText("ショップ", 0, 8 + h * .56);
+      ctx.fillStyle = "#594236"; ctx.fillText("ショップ", 0, 8 + h * .56);
+      ctx.restore();
+    }
+  }
+
   // ふだんはのんびり跳ねている。なでると大きくはずむ
   const happy = Math.max(0, game.petHappy);
   const stroke = Math.max(0, game.petStroke) > 0;
@@ -4037,6 +4191,33 @@ function drawHome(){
     drawCreature(ctx, pet, cx, baseY + (pet.stage >= 2 ? 3 : -6) + hop, 62, { im: IMG.s1, sx, sy, cap: 3.2 });
   }
 
+  // 頭の高さを、名前の札に知らせる（スマホ）
+  {
+    const head = Math.round((GY + 2 - (drawCreature.lastH || 60) - 6) * scale);
+    if(Math.abs(head - (game._petHead || 0)) > 2){ game._petHead = head; document.documentElement.style.setProperty("--petHead", head + "px"); }
+  }
+  // あげた・遊んだときのふきだし
+  if(game.homeMsg){
+    const m = game.homeMsg; m.t = game.time - m.t0;   // 画面の速さによらず、時間で進める
+    if(m.t > 3.2) game.homeMsg = null;
+    else{
+      if(m.kind === "eat" && m.t < 1.2){
+        const im = shopIm(m.icon);
+        if(im){ const k = 1 - m.t / 1.2, s = 34 * (0.4 + k * 0.6); ctx.globalAlpha = Math.min(1, k * 2); ctx.drawImage(im, W / 2 - s / 2, GY - 70 - s / 2 + (1 - k) * 30, s, s); ctx.globalAlpha = 1; }
+      }
+      ctx.globalAlpha = Math.min(1, (3.2 - m.t) * 2, m.t * 4);
+      ctx.font = "800 13px sans-serif";
+      const lines = wrapText(m.text, W - 60);
+      const bw = Math.max(...lines.map(l => ctx.measureText(l).width)) + 24, bh = lines.length * 18 + 14;
+      // 名前の札（頭の上 66px）のさらに上に出す
+      const by = Math.max(8, GY + 2 - (drawCreature.lastH || 60) - 6 - 72 / scale - bh);
+      ctx.fillStyle = "rgba(255,253,247,.96)"; roundRect(W / 2 - bw / 2, by, bw, bh, 12); ctx.fill();
+      ctx.strokeStyle = COL.line; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.fillStyle = "#594236"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+      lines.forEach((l, i) => ctx.fillText(l, W / 2, by + 8 + i * 18));
+      ctx.globalAlpha = 1;
+    }
+  }
   // ハート
   for(const h of game.hearts){
     h.t += 1 / 60;
@@ -4056,6 +4237,13 @@ function drawHome(){
   }
 }
 
+// 横幅に合わせて日本語を折りかえす
+function wrapText(t, maxW){
+  const out = []; let cur = "";
+  for(const ch of t){ if(ctx.measureText(cur + ch).width > maxW && cur){ out.push(cur); cur = ch; } else cur += ch; }
+  if(cur) out.push(cur);
+  return out;
+}
 function drawPops(dt){
   for(const p of game.pops){
     p.t += dt;
