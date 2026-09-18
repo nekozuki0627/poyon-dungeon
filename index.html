@@ -670,6 +670,19 @@ const CHUNKS = [
   {tier:3, items:[{k:"spike"},{k:"spike", t:.5},{k:"spike", t:.5}]},
   {tier:3, items:[{k:"ceil", w:80},{k:"pit", wr:.45, t:.3}]},
 ];
+/* 台（ゆま 9/18「第2段階のステージは、台を登るしくみを」）。第2段階のダンジョンだけに混ぜる。
+   台の横にぶつかると倒れる（トゲと同じ）。上に乗れば走っていける。端から落ちれば元の地面へ。
+   glue ＝ 前の台のすぐ隣に置く（階段）。台の高さ h は地面からの高さ */
+const PLAT_CHUNKS = [
+  {tier:0, items:[{k:"plat", h:44, w:130}]},
+  {tier:0, items:[{k:"plat", h:40, w:90},{k:"plat", h:78, w:110, glue:true}]},                    // 2段の階段
+  {tier:1, items:[{k:"plat", h:50, w:100},{k:"pit", wr:.45, t:.05}]},                              // 台から穴を越える
+  {tier:1, items:[{k:"plat", h:40, w:80},{k:"plat", h:76, w:80, glue:true},{k:"plat", h:40, w:80, glue:true}]},  // 山
+  {tier:2, items:[{k:"plat", h:70, w:120},{k:"spike", t:.25}]},                                   // 高い台から降りてトゲ
+  {tier:2, items:[{k:"plat", h:44, w:70},{k:"plat", h:44, w:70, t:.32}]},                          // 台から台へ跳びうつる
+  {tier:3, items:[{k:"plat", h:40, w:70},{k:"plat", h:78, w:70, glue:true},{k:"plat", h:110, w:100, glue:true}]}, // 3段
+];
+const PLAT_STAGES = [2];   // 台が出るのは第2段階のダンジョン
 const SIZE = { spike:{w:28,h:22}, spike2:{w:54,h:22}, batLow:{w:0,y:-20}, batHigh:{w:0,y:-72} };
 // 天井から下がる岩の下端。低すぎるとスライムの絵がめり込んで「当たっているのに死なない」ように見える
 const CEIL_BOTTOM = -70;
@@ -681,7 +694,7 @@ function makeRun(opt = {}){
   return {
     cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
     goalX: opt.goal ? GOAL_M * PX_PER_M + PX : 0, cleared: false, gemTotal: 0,
-    gems: [], gid: 0, gotQ: [], magnet: opt.magnet ?? 0,
+    gems: [], gid: 0, gotQ: [], plats: [], platOn: opt.plat ?? false, magnet: opt.magnet ?? 0,
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
     P: { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null },
     ev: [],   // 画面側に伝える出来事（着地・ジャンプなど）
@@ -697,6 +710,7 @@ function placeChunk(run, chunk, x0, t0){
   chunk.items.forEach((it, i) => {
     let x;
     if(i === 0){ x = x0; }
+    else if(it.glue){ x = end; }
     else if(snap){
       const want = tEnd + (it.t || 0);
       const tx = Math.ceil((want - JUMP_LEAD) / GRID) * GRID + JUMP_LEAD;
@@ -705,7 +719,9 @@ function placeChunk(run, chunk, x0, t0){
     }else{
       x = end + (it.t || 0) * v;
     }
-    if(it.k === "pit"){
+    if(it.k === "plat"){
+      run.plats.push({x0:x, x1:x + it.w, h:it.h}); end = x + it.w;
+    }else if(it.k === "pit"){
       const w = Math.round(it.wr * reach(v));
       run.pits.push({x0:x, x1:x + w}); end = x + w;
     }else if(it.k === "ceil"){
@@ -735,6 +751,8 @@ function generate(run){
     const tier = tierFor(m);
     const pool = [];
     CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 3 : 1; for(let i=0;i<w;i++) pool.push(c); } });
+    if(run.platOn) PLAT_CHUNKS.forEach(c => { if(c.tier <= tier){ const w = c.tier === tier ? 4 : 2; for(let i=0;i<w;i++) pool.push(c); } });
+    const np = run.plats.length;
     const chunk = pool[Math.floor(Math.random() * pool.length)];
     const end = placeChunk(run, chunk, run.nextX, run.tAt);
     // 次の障害物は「跳ぶ瞬間が拍に乗る」位置に置く。
@@ -744,7 +762,16 @@ function generate(run){
     const snapped = Math.ceil((want - JUMP_LEAD) / GRID) * GRID + JUMP_LEAD;
     // クリスタルは「跳べば通る道すじ」に置く。拾うために無理をさせない
     const r = Math.random();
-    if(r < 0.60){
+    const newPlats = run.plats.slice(np);
+    if(newPlats.length && r < 0.75){
+      // 台の上を走れば取れる位置に、横一列
+      const top = newPlats.reduce((a, b) => b.h > a.h ? b : a);
+      const gid = ++run.gid, cx = (top.x0 + top.x1) / 2;
+      for(let i = -1; i <= 1; i++) run.gems.push({ x: cx + i * 22, y: -top.h - R - 6, got: false, gid, set: 3 });
+      run.gemTotal += 3;
+    }else if(newPlats.length){
+      // なし
+    }else if(r < 0.60){
       const mid = (run.nextX + end) / 2;
       // 天井の岩の下に山なりで置くと、跳べば岩に当たるので絶対に取れない（ゆま指摘 9/18）。
       // 岩の下では「跳ばずにくぐる」道すじ＝地面すれすれに一列に並べる
@@ -763,6 +790,7 @@ function generate(run){
   const cut = run.cam - 100;
   run.obs  = run.obs.filter(o => (o.x + (o.w || 12)) > cut);
   run.pits = run.pits.filter(p => p.x1 > cut);
+  run.plats = run.plats.filter(p => p.x1 > cut);
   run.gems = run.gems.filter(q => !q.got && q.x > cut);
 }
 
@@ -791,6 +819,13 @@ function batX(run, o, wx){
   return o.x + o.vb * T + (o.wa / o.ww) * (1 - Math.cos(o.ww * T));
 }
 
+// wx の真下にある台（重なるときは高いほう）
+function platAt(run, wx){
+  let best = null;
+  for(const q of run.plats) if(wx >= q.x0 && wx < q.x1 && (!best || q.h > best.h)) best = q;
+  return best;
+}
+
 function circleRect(cx, cy, r, x0, y0, x1, y1){
   const nx = Math.max(x0, Math.min(cx, x1)), ny = Math.max(y0, Math.min(cy, y1));
   return (cx-nx)*(cx-nx) + (cy-ny)*(cy-ny) < r*r;
@@ -809,13 +844,20 @@ function stepRun(run, dt){
   const wx = run.cam + PX;
   if(run.goalX && wx >= run.goalX){ run.cleared = true; return; }
   const pit = inPit(run, wx);
+  const pl = platAt(run, wx);            // 足もとの台（なければ null）
+  const floorY = pl ? -pl.h : 0;          // 立てる高さ（地面は 0）
 
-  if(P.onGround && pit){ P.onGround = false; P.coy = COYOTE; }
+  if(P.onGround && (pl ? false : pit)){ P.onGround = false; P.coy = COYOTE; }
+  if(P.onGround && P.y + R < floorY - 1){ P.onGround = false; P.coy = COYOTE; }   // 台の端から落ちる
   if(!P.onGround){
     P.coy -= dt;
+    const prevY = P.y;
     P.vy += G * dt;
     P.y  += P.vy * dt;
-    if(P.vy >= 0 && P.y >= -R){
+    if(pl && P.vy >= 0 && P.y >= floorY - R && prevY <= floorY - R + 2){
+      // 台の上に着地
+      P.y = floorY - R; P.vy = 0; P.onGround = true; P.jumps = 0; run.ev.push("land");
+    }else if(P.vy >= 0 && P.y >= -R){
       if(!pit && !P.fallen){ P.y = -R; P.vy = 0; P.onGround = true; P.jumps = 0; run.ev.push("land"); }
       else if(P.y > -R + 6){ P.fallen = true; }
     }
@@ -835,6 +877,11 @@ function stepRun(run, dt){
   const hr = R * 0.78;   // 当たり判定は見た目より少し小さく（理不尽に感じさせない）
   for(const o of run.obs) if(o.k === "bat") o.bx = batX(run, o, wx);
   if(safe) return;
+  for(const q of run.plats){
+    if(q.x0 > wx + 40 || q.x1 < wx - 40) continue;
+    // 上の面より少し下から下を「横の壁」とみなす。上に乗っているときは当たらない
+    if(circleRect(wx, P.y, hr, q.x0, -q.h + 7, q.x1, 0)){ P.dead = "wall"; return; }
+  }
   for(const o of run.obs){
     if(o.x > wx + 60 || (o.x + (o.w || 12)) < wx - 60) continue;
     if(o.k === "spike"){
@@ -1664,7 +1711,7 @@ function refreshHome(){
 function start(){
   game.mode = "play"; game.ui = null;
   game.runGems = 0;
-  game.run = makeRun({ magnet: perk("magnet"), goal: true });
+  game.run = makeRun({ magnet: perk("magnet"), goal: true, plat: PLAT_STAGES.indexOf(pet.stage) >= 0 });
   game.parts = []; game.pops = []; game.shake = 0; game.lastFloor = 1; game.floorFlash = 0;
   game.combo = 0; game.bestCombo = 0; game.bonus = 0; game.perfects = 0; game.gsets = {}; game.revived = false; game.passedDeath = false;
   musicStart();
@@ -1813,6 +1860,7 @@ function revive(){
   const from = run.cam - 60, to = run.cam + W + 280;
   run.obs  = run.obs.filter(o => (o.x + (o.w || 12)) < from || o.x > to);
   run.pits = run.pits.filter(q => q.x1 < from || q.x0 > to);
+  run.plats = run.plats.filter(q => q.x1 < from || q.x0 > to);
   if(run.nextX < to){ run.nextX = to; run.tAt = travelTime(PX, run.nextX); }
   Object.assign(run.P, { y:-R, vy:0, onGround:true, jumps:0, coy:0, fallen:false, dead:null });
   run.inv = 1.6;                    // しばらく無敵
@@ -3084,6 +3132,48 @@ function drawSigns(run){
   }
 }
 
+/* 台の絵。ステージごとの台（Gemini）assets/stage_obj/{ステージ}_plat.png を、台の大きさに合わせて置く。
+   まだ絵が無いステージは、ステージの床の絵を切って台にする */
+const platImg = {};
+function drawPlats(run){
+  if(!run.plats.length) return;
+  const k = stageKey();
+  if(k && !platImg[k]){ platImg[k] = new Image(); platImg[k].src = `assets/stage_obj/${k}_plat.png`; }
+  const im = k ? platImg[k] : null;
+  const so = curObj();
+  const pal = curStage() || COL;
+  for(const q of run.plats){
+    const x = q.x0 - run.cam, w = q.x1 - q.x0, top = GY - q.h;
+    if(x > W + 20 || x + w < -20) continue;
+    // 足もとの影
+    ctx.fillStyle = "rgba(60,36,28,.22)"; ctx.fillRect(x + 3, GY - 3, w, 6);
+    if(ready(im)){
+      // Geminiの台は薄い板なので、いちばん上に板を1枚置き、その下は板の「横の面」を積み重ねて地面までつなぐ。
+      // 横は、左右のはし（丸み）を残して、まん中だけ伸ばす
+      const iw = im.naturalWidth, ih = im.naturalHeight;
+      const slice = (sy, sh, dy, dh) => {
+        const cap = iw * 0.08, capW = Math.min(w / 2, dh * (cap / sh));
+        ctx.drawImage(im, 0, sy, cap, sh, x, dy, capW, dh);
+        ctx.drawImage(im, cap, sy, iw - cap * 2, sh, x + capW, dy, w - capW * 2, dh);
+        ctx.drawImage(im, iw - cap, sy, cap, sh, x + w - capW, dy, capW, dh);
+      };
+      const topH = Math.min(q.h, 30);
+      // 下から上へ積む（上の板が手前に重なるように、最後に描く）
+      const bandSrc = ih * 0.42, bandSH = ih * 0.52, bandH = 24;
+      for(let yy = GY - bandH; yy > top + topH - 10; yy -= bandH - 3) slice(bandSrc, bandSH, yy, bandH);
+      slice(0, ih, top, topH);
+    }else if(so && ready(so.floor)){
+      const f = so.floor;
+      ctx.drawImage(f, 0, 0, f.naturalWidth * Math.min(1, w / 200), f.naturalHeight * .5, x, top, w, q.h);
+      ctx.fillStyle = pal.groundTop || COL.groundTop; ctx.fillRect(x, top, w, 6);
+      ctx.strokeStyle = "#594236"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, top + 1, w - 2, q.h);
+    }else{
+      ctx.fillStyle = pal.ground || COL.ground; ctx.fillRect(x, top, w, q.h);
+      ctx.fillStyle = pal.groundTop || COL.groundTop; ctx.fillRect(x, top, w, 6);
+      ctx.strokeStyle = "#594236"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, top + 1, w - 2, q.h);
+    }
+  }
+}
 function drawObstacles(run){
   const cam = run.cam;
   for(const o of run.obs){
@@ -3903,6 +3993,7 @@ function frame(now){
     drawBackground(run.cam);
     drawGround(run);
     drawSigns(run);
+    drawPlats(run);
     drawObstacles(run);
     drawGems(run);
     drawSlime(run);
