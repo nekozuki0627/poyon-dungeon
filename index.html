@@ -870,14 +870,16 @@ function generate(run, upto){
     const r = run.rnd();
     const newPlats = run.plats.slice(np);
     const special = chunk.items.some(it => it.k === "fork" || it.k === "foe");
-    if(newPlats.length && r < 0.75){
+    if(special){
+      // 分かれ道や敵のまとまりには置かない（まちがった段に置くと、どうやっても取れなくなる）
+    }else if(newPlats.length && r < 0.75){
       // 台の上を走れば取れる位置に、横一列
       const top = newPlats.reduce((a, b) => b.h > a.h ? b : a);
       const gid = ++run.gid, cx = (top.x0 + top.x1) / 2;
       for(let i = -1; i <= 1; i++) run.gems.push({ x: cx + i * 22, y: -top.h - R - 6, got: false, gid, set: 3 });
       run.gemTotal += 3;
-    }else if(newPlats.length || special){
-      // なし
+    }else if(newPlats.length){
+      // 台の上に置かなかったときは、なし
     }else if(r < 0.60){
       const mid = (run.nextX + end) / 2;
       // 天井の岩の下に山なりで置くと、跳べば岩に当たるので絶対に取れない（ゆま指摘 9/18）。
