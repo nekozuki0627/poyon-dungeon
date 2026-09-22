@@ -397,7 +397,18 @@ body.cinema #adbar, body.cinema #mute{display:none}
   box-shadow:0 5px 0 rgba(89,66,54,.35);touch-action:none;user-select:none;-webkit-user-select:none;
   display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
 }
-#atkBtn .ic{font-size:30px;line-height:1}
+#atkBtn .ic,#magBtn .ic{font-size:30px;line-height:1}
+#magBtn{
+  position:fixed;right:max(14px, env(safe-area-inset-right));bottom:calc(56px + env(safe-area-inset-bottom) + 18px);
+  width:84px;height:84px;border-radius:50%;z-index:6;
+  border:3px solid #594236;background:radial-gradient(circle at 35% 30%, #9FF3F0, #2CB3AD);
+  color:#fff;font-size:15px;font-weight:900;letter-spacing:.06em;text-shadow:0 2px 0 rgba(89,66,54,.55);
+  box-shadow:0 5px 0 rgba(89,66,54,.35);touch-action:none;user-select:none;-webkit-user-select:none;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
+}
+#magBtn:active,#magBtn.on{transform:translateY(3px);box-shadow:0 2px 0 rgba(89,66,54,.35)}
+#magBtn.cd{filter:grayscale(.6) brightness(.9)}
+body.cinema #magBtn{display:none}
 #atkBtn:active,#atkBtn.on{transform:translateY(3px);box-shadow:0 2px 0 rgba(89,66,54,.35)}
 body.cinema #atkBtn{display:none}
 #mute{
@@ -618,6 +629,7 @@ body.cinema #atkBtn{display:none}
 
 <button id="mute" aria-label="音のオン・オフ">🔊</button>
 <button id="atkBtn" class="hide" aria-label="こうげき"><span class="ic">🐾</span>こうげき</button>
+<button id="magBtn" class="hide" aria-label="すいよせ"><span class="ic">🌀</span>すいよせ</button>
 
 <!-- 画面下にいつも空けておく広告の場所。公開後にここへ広告を入れる -->
 <div id="adbar"><span>広告スペース</span></div>
@@ -749,6 +761,10 @@ const FORK_CHUNKS = [
   {tier:3, items:[{k:"fork", n:3}]},
 ];
 const SYMS = ["★", "♥", "◆", "♣", "●", "▲"];
+/* スライム：第3段階から「すいよせ」ボタン（ゆま 9/22 A案）。
+   押すと少しのあいだ、遠くのクリスタルを吸いよせる。天井の岩の中や穴の底に、ふつうには取れないクリスタルが埋まっていて、
+   すいよせを「いいところで」使わないと全部は取れない。倒れる・倒れないには関係しない（技量で深さが決まる芯はそのまま） */
+const MAG_R = 104, MAG_TIME = 0.9, MAG_CD = 2.4;
 const FOE_W = 34;            // 敵の幅
 const ATK_RANGE = 96;        // 攻撃がとどく前の距離
 const ATK_TIME = 0.24, ATK_CD = 0.34;
@@ -777,6 +793,7 @@ function makeRun(opt = {}){
     cam: 0, v: 172, obs: [], pits: [], nextX: opt.startX ?? 460, tAt: 0, inv: 0,
     goalX: opt.goal ? GOAL_M * PX_PER_M + PX : 0, cleared: false, gemTotal: 0,
     gems: [], gid: 0, gotQ: [], plats: [], platOn: opt.plat ?? false, foeOn: opt.foe ?? false, forkOn: opt.fork ?? false,
+    magOn: opt.mag ?? false, mag: 0, magCd: 0,
     atk: 0, atkCd: 0, magnet: opt.magnet ?? 0,
     rnd: seededRnd(seedOf(opt.seed || "cave")),
     fixedV: opt.fixedV ?? null, gen: opt.gen ?? true,
@@ -870,8 +887,16 @@ function generate(run, upto){
     const r = run.rnd();
     const newPlats = run.plats.slice(np);
     const special = chunk.items.some(it => it.k === "fork" || it.k === "foe");
+    const cItem = run.obs.find(o => o.k === "ceil" && o.x >= run.nextX - 1 && o.x <= end);
+    const pItem = run.pits.find(q => q.x0 >= run.nextX - 1 && q.x1 <= end + 1);
     if(special){
       // 分かれ道や敵のまとまりには置かない（まちがった段に置くと、どうやっても取れなくなる）
+    }else if(run.magOn && (cItem || pItem) && r < 0.4){
+      // すいよせでしか取れないクリスタル：天井の岩の中か、穴の底
+      const gid = ++run.gid;
+      if(cItem){ const cx = cItem.x + cItem.w / 2; for(let i = -1; i <= 1; i++) run.gems.push({ x: cx + i * 22, y: -118, got: false, gid, set: 3, mag: true }); }
+      else     { const cx = (pItem.x0 + pItem.x1) / 2; for(let i = -1; i <= 1; i++) run.gems.push({ x: cx + i * 22, y: 34, got: false, gid, set: 3, mag: true }); }
+      run.gemTotal += 3;
     }else if(newPlats.length && r < 0.75){
       // 台の上を走れば取れる位置に、横一列
       const top = newPlats.reduce((a, b) => b.h > a.h ? b : a);
@@ -918,7 +943,10 @@ function fixGems(run, target){
   while(total > target){
     const one = gs.filter(q => q.set === 1);
     if(one.length && (total - target < 3 || !gs.some(q => q.set === 3))){ const q = one[Math.floor(run.rnd() * one.length)]; del(q.gid); total -= 1; continue; }
-    const three = [...new Set(gs.filter(q => q.set === 3).map(q => q.gid))];
+    // すいよせのクリスタルは全体の3割くらいに保つ（多すぎると、すいよせばかりのステージになる）
+    const magN = gs.filter(q => q.mag).length, trimMag = magN > target * 0.3;
+    let three = [...new Set(gs.filter(q => q.set === 3 && !!q.mag === trimMag).map(q => q.gid))];
+    if(!three.length) three = [...new Set(gs.filter(q => q.set === 3).map(q => q.gid))];
     if(!three.length) break;
     del(three[Math.floor(run.rnd() * three.length)]); total -= 3;
   }
@@ -934,6 +962,11 @@ function fixGems(run, target){
 
 const inPit = (run, wx) => run.pits.some(p => wx > p.x0 && wx < p.x1);
 
+function tryMagnet(run){
+  if(!run.magOn || run.P.dead || run.magCd > 0) return false;
+  run.mag = MAG_TIME; run.magCd = MAG_CD; run.ev.push("mag");
+  return true;
+}
 function tryAttack(run){
   if(!run.foeOn || run.P.dead || run.atkCd > 0) return false;
   run.atk = ATK_TIME; run.atkCd = ATK_CD; run.ev.push("atk");
@@ -979,6 +1012,8 @@ function stepRun(run, dt){
   if(P.dead) return;
   if(run.inv > 0) run.inv -= dt;
   if(run.atkCd > 0) run.atkCd -= dt;
+  if(run.magCd > 0) run.magCd -= dt;
+  if(run.mag > 0) run.mag -= dt;
   const safe = run.inv > 0;        // 復活直後は当たらない
   const prevWx = run.cam + PX;
   const m = run.cam / PX_PER_M;
@@ -1012,7 +1047,7 @@ function stepRun(run, dt){
   if(P.y - R < CEIL){ P.y = CEIL + R; if(P.vy < 0) P.vy = 0; }
 
   // クリスタル拾い（無敵でも拾える）
-  const pr = R + 13 + run.magnet;
+  const pr = R + 13 + run.magnet + (run.mag > 0 ? MAG_R : 0);
   for(const q of run.gems){
     if(q.got || Math.abs(q.x - wx) > pr + 40) continue;
     const dx = q.x - wx, dy = q.y - P.y;
@@ -1851,6 +1886,7 @@ function musicSchedule(){
   }
 }
 const SFX = {
+  mag(){ tone(300, .35, "sine", .09, 2.4); setTimeout(()=>tone(900, .2, "triangle", .05, .7), 120); },
   purr(){ tone(520 + Math.random() * 80, .12, "sine", .05, 1.2); },
   atk(){  tone(260, .09, "sawtooth", .08, .5); setTimeout(()=>tone(520, .06, "square", .05, .6), 30); },
   kill(){ tone(180, .18, "square", .1, .4); setTimeout(()=>tone(880, .14, "triangle", .09, 1.5), 60); },
@@ -1877,7 +1913,7 @@ function burst(x, y, n, col, spd, up = 0){
 const $ = id => document.getElementById(id);
 function showTitle(){
   game.mode = "title"; game.ui = null;
-  $("atkBtn").classList.add("hide");
+  $("atkBtn").classList.add("hide"); $("magBtn").classList.add("hide");
   $("titleView").classList.remove("hide"); $("resultView").classList.add("hide"); $("pauseView").classList.add("hide");
   $("evoView").classList.add("hide"); $("nameView").classList.add("hide"); $("rGrow").classList.add("hide");
   if(game.best > 0){ $("titleBest").textContent = `ベスト ${Math.floor(game.best)}　（いちばん深く 地下${floorOf(game.bestDist)}階）`; $("titleBest").classList.remove("hide"); }
@@ -1902,9 +1938,11 @@ function start(){
   game.mode = "play"; game.ui = null;
   game.runGems = 0;
   game.run = makeRun({ magnet: perk("magnet"), goal: true, seed: pet.stage === 1 ? "cave" : `${pet.line}_${pet.stage}`, plat: PLAT_STAGES.indexOf(pet.stage) >= 0,
+                       mag: (pet.line === "slime" || pet.line === "slime_hard") && pet.stage >= 3,
                        foe: pet.line === "beast" && pet.stage >= 3,
                        fork: pet.line.indexOf("human") === 0 && pet.stage >= 3 });
   $("atkBtn").classList.toggle("hide", !game.run.foeOn);
+  $("magBtn").classList.toggle("hide", !game.run.magOn);
   // ゴールまで先に作って、クリスタルの数をそろえる
   generate(game.run, game.run.goalX + 2000);
   fixGems(game.run, GEM_TARGET[pet.stage]);
@@ -1918,7 +1956,7 @@ const floorOf = m => Math.min(GOAL_FLOOR, Math.floor(m / FLOOR_M) + 1);
 
 function die(){
   const run = game.run, m = run.cam / PX_PER_M;
-  $("atkBtn").classList.add("hide");
+  $("atkBtn").classList.add("hide"); $("magBtn").classList.add("hide");
   const score = Math.floor(m) + game.bonus;
   // 拾ったクリスタルを持ち帰る（系統によっては多めに持てる）
   const picked = Math.round(game.runGems * perk("gem") * famBonus());
@@ -1966,7 +2004,7 @@ function die(){
    ノーミス（復活なし）で、その回に出たクリスタルをぜんぶ拾えていたら perfect。
    perfect はスライムの「むずかしい」に進む条件のひとつ */
 function clearRun(){
-  $("atkBtn").classList.add("hide");
+  $("atkBtn").classList.add("hide"); $("magBtn").classList.add("hide");
   const run = game.run, m = GOAL_M;
   const score = m + game.bonus;
   const picked = Math.round(game.runGems * perk("gem") * famBonus());
@@ -2065,6 +2103,7 @@ function revive(){
   game.combo = 0; game.parts = []; game.pops = [];
   game.shake = 0; game.mode = "play";
   $("atkBtn").classList.toggle("hide", !run.foeOn);
+  $("magBtn").classList.toggle("hide", !run.magOn);
   burst(PX, GY, 18, "#FFD13B", 200, 60);
   SFX.floor();
   musicStart();
@@ -2752,7 +2791,11 @@ $("atkBtn").addEventListener("pointerdown", e => {
   if(game.mode === "play" && game.run) tryAttack(game.run);
 });
 window.addEventListener("keydown", e => {
-  if((e.code === "KeyX" || e.code === "KeyZ") && game.mode === "play" && game.run){ e.preventDefault(); tryAttack(game.run); }
+  if((e.code === "KeyX" || e.code === "KeyZ") && game.mode === "play" && game.run){ e.preventDefault(); tryAttack(game.run); tryMagnet(game.run); }
+});
+$("magBtn").addEventListener("pointerdown", e => {
+  e.stopPropagation(); e.preventDefault();
+  if(game.mode === "play" && game.run) tryMagnet(game.run);
 });
 let storeTab = "food";
 function openStore(){
@@ -4014,6 +4057,23 @@ function runFrame(P){
   return fr[i];
 }
 
+// すいよせの輪（エフェクト）。とどく範囲を見せる
+function drawMagnet(){
+  const run = game.run;
+  if(!run || !run.magOn) return;
+  $("magBtn").classList.toggle("cd", run.magCd > 0 && run.mag <= 0);
+  if(!(run.mag > 0)) return;
+  const k = run.mag / MAG_TIME, cy = GY + run.P.y, r = R + 13 + MAG_R;
+  ctx.save();
+  ctx.globalAlpha = 0.35 * k + 0.15;
+  ctx.strokeStyle = "#8CF6F2"; ctx.lineWidth = 3; ctx.setLineDash([6, 8]); ctx.lineDashOffset = -game.time * 60;
+  ctx.beginPath(); ctx.arc(PX, cy, r * (0.92 + 0.08 * Math.sin(game.time * 20)), 0, 7); ctx.stroke();
+  ctx.setLineDash([]);
+  const g = ctx.createRadialGradient(PX, cy, 4, PX, cy, r);
+  g.addColorStop(0, "rgba(140,246,242,.18)"); g.addColorStop(1, "rgba(140,246,242,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(PX, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+}
 // 攻撃の軌跡。つめで引っかくような3本の光の弧（エフェクトなので図形で描く）
 function drawSlash(dt){
   if(!(game.slashT > 0)) return;
@@ -4463,6 +4523,10 @@ function frame(now){
           SFX.atk(); game.slashT = 0.22;
           $("atkBtn").classList.add("on"); setTimeout(() => $("atkBtn").classList.remove("on"), 90);
         }
+        else if(e === "mag"){
+          SFX.mag();
+          $("magBtn").classList.add("on"); setTimeout(() => $("magBtn").classList.remove("on"), 90);
+        }
         else if(e === "kill"){
           SFX.kill(); game.shake = Math.max(game.shake, 5);
           burst(PX + 70, GY - 40, 22, "#FFD13B", 240, 60);
@@ -4521,6 +4585,7 @@ function frame(now){
     drawPlats(run);
     drawObstacles(run);
     drawGems(run);
+    drawMagnet();
     drawSlime(run);
     for(const o of run.obs) if(o.k === "gate"){ const x = o.x - run.cam; if(x > -140 && x < W + 60) drawGate(o, x); }
     drawSlash(dt);
