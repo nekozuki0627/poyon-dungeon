@@ -417,6 +417,11 @@ body.cinema #atkBtn{display:none}
   display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;
 }
 </style>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ぽよん">
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -4606,6 +4611,15 @@ showTitle();
 openStart();
 adInit();
 requestAnimationFrame(frame);
+</script>
+<script>
+/* 電波が なくても 遊べるように する 係を 入れる（2026-10-02）。
+   1回 ひらいておけば、つぎからは オフラインでも 動く */
+if ("serviceWorker" in navigator) {
+  addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
