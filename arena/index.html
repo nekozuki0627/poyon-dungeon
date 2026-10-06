@@ -42,6 +42,10 @@
     font-family:inherit; font-size:17px; font-weight:900; text-decoration:none; box-shadow:0 5px 0 rgba(89,66,54,.4) }
   .go{ background:linear-gradient(#9FF3F0,#2CB3AD); color:#fff; text-shadow:0 2px 0 rgba(89,66,54,.5) }
   .again{ background:linear-gradient(#FFF8EC,#FFE9CF); color:#594236 }
+  #muteBtn{ position:fixed; z-index:8; top:max(10px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right));
+    width:40px; height:40px; border-radius:50%; border:2px solid rgba(89,66,54,.5);
+    background:rgba(255,255,255,.75); font-size:19px; line-height:1; padding:0 }
+  #muteBtn:active{ transform:translateY(2px) }
   #hintPc{ display:none }
   @media (hover:hover) and (pointer:fine){      /* マウスのある画面＝PCのときだけ出す */
     #hint{ display:none }
@@ -53,6 +57,7 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
+<button id="muteBtn" aria-label="音">🔊</button>
 <button class="pad" id="jumpBtn" aria-label="とぶ"><span class="ic">⬆</span>とぶ</button>
 <button class="pad" id="atkBtn" aria-label="こうげき"><span class="ic">⚔</span>こうげき</button>
 <div id="lvup" class="sheet"><div class="inner">
@@ -63,7 +68,7 @@
   <div class="ttl">ぬしを たおした！</div>
   <div class="big">もちかえった石　<span id="winGot">0</span></div>
   <div class="sub">小屋の ぜんぶで　<span id="winAll">0</span> こ</div>
-  <a class="go" href="../index.html">おうちへ もどる</a>
+  <a class="go" href="../index.html" onclick="sleepAudio()">おうちへ もどる</a>
   <button class="again" onclick="location.reload()">もういちど</button>
 </div></div>
 <div id="hint">画面の左がわを 指でなぞると 左右に動く</div>
@@ -89,6 +94,8 @@ const BPM = 132, SPB = 60 / BPM, JUST = 0.15;
 const STEP = 1/120;
 
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let muted = false;                                   // 音を 消しているか（おぼえておく）
+try{ muted = localStorage.getItem("poyon_arena_mute") === "1"; }catch(e){}
 let dpr = 1, scale = 1, H = 700, GY = 500, offX = 0;
 function resize(){
   dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -262,6 +269,10 @@ function btn(id, down){
   el.addEventListener("pointerup",   () => el.classList.remove("on"));
   el.addEventListener("pointerleave",() => el.classList.remove("on"));
 }
+document.getElementById("muteBtn").addEventListener("pointerdown", e => {
+  e.preventDefault(); e.stopPropagation(); startAudio(); toggleMute();
+});
+document.getElementById("muteBtn").textContent = muted ? "🔇" : "🔊";
 btn("jumpBtn", () => jump());
 btn("atkBtn",  () => attack());
 addEventListener("keydown", e => {
@@ -316,14 +327,48 @@ function hitFoe(f, power, just){
 }
 
 /* ---- 音と拍（その場で作る。小さく、うるさくしない） ---- */
-let actx = null, musicT0 = null, schedTo = 0;
+let actx = null, musicT0 = null, schedTo = 0, master = null, bgm = null;
+/** 音の 出口。master＝ぜんぶ、bgm＝曲だけ */
+function out(forMusic){ return forMusic ? (bgm || actx.destination) : (master || actx.destination); }
+function setVol(){
+  if(!master) return;
+  master.gain.value = muted ? 0 : 1;
+  bgm.gain.value = muted ? 0 : (paused ? 0.25 : 1);     // 止まっている間は しぼる
+}
 function startAudio(){
   try{
-    if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if(!actx){
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      master = actx.createGain(); master.connect(actx.destination);
+      bgm = actx.createGain(); bgm.connect(master);
+      setVol();
+    }
     if(actx.state === "suspended") actx.resume();
     if(musicT0 === null){ musicT0 = actx.currentTime + 0.12; schedTo = musicT0; }
   }catch(e){}
 }
+function toggleMute(){
+  muted = !muted;
+  try{ localStorage.setItem("poyon_arena_mute", muted ? "1" : "0"); }catch(e){}
+  setVol();
+  const b = document.getElementById("muteBtn");
+  if(b) b.textContent = muted ? "🔇" : "🔊";
+}
+/* ほかの画面を 見ている あいだは 鳴らさない */
+function sleepAudio(){ try{ if(actx && actx.state === "running") actx.suspend(); }catch(e){} }
+function wakeAudio(){
+  try{
+    if(!actx || musicT0 === null) return;
+    actx.resume().then(() => {                               // 止まっていた ぶんを 拍に そろえ直す
+      const n = actx.currentTime;
+      if(schedTo < n) schedTo = musicT0 + Math.ceil((n - musicT0) / SPB) * SPB;
+    });
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", () => { if(document.hidden) sleepAudio(); else wakeAudio(); });
+addEventListener("pagehide", sleepAudio);
+addEventListener("blur", sleepAudio);
+addEventListener("focus", wakeAudio);
 /** いま 何拍目か（小数つき）。音が まだなら 時計で代用 */
 function beatNow(){
   if(actx && musicT0 !== null) return (actx.currentTime - musicT0) / SPB;
@@ -339,14 +384,14 @@ function note(f, t, d, v, type){
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(v, t + .01);
   g.gain.exponentialRampToValueAtTime(.0001, t + d);
-  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + d + .02);
+  o.connect(g).connect(out(true)); o.start(t); o.stop(t + d + .02);
 }
 function kick(t){
   if(!actx) return;
   const o = actx.createOscillator(), g = actx.createGain();
   o.type = "sine"; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + .12);
   g.gain.setValueAtTime(.22, t); g.gain.exponentialRampToValueAtTime(.0001, t + .16);
-  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + .2);
+  o.connect(g).connect(out(true)); o.start(t); o.stop(t + .2);
 }
 function playBeat(b, t){
   kick(t);
@@ -357,8 +402,9 @@ function playBeat(b, t){
   if(b % 8 === 0) note(f / 2, t, .5, .05, "sine");
 }
 function schedule(){
-  if(!actx || musicT0 === null) return;
+  if(!actx || musicT0 === null || actx.state !== "running") return;
   const now = actx.currentTime;
+  if(schedTo < now - 0.5) schedTo = musicT0 + Math.ceil((now - musicT0) / SPB) * SPB;   // 置いていかれたら 拍に そろえ直す
   while(schedTo < now + 0.25){
     playBeat(Math.max(0, Math.round((schedTo - musicT0) / SPB)), schedTo);
     schedTo += SPB;
@@ -372,7 +418,7 @@ function sfx(f, d, type, v, slide){
     if(slide) o.frequency.exponentialRampToValueAtTime(f * slide, actx.currentTime + d);
     g.gain.setValueAtTime(v || .08, actx.currentTime);
     g.gain.exponentialRampToValueAtTime(.0001, actx.currentTime + d);
-    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + d + .02);
+    o.connect(g).connect(out(false)); o.start(); o.stop(actx.currentTime + d + .02);
   }catch(e){}
 }
 function burst(x, y, n, col, spd){
@@ -465,7 +511,11 @@ function step(dt){
     if(f.flash > 0) f.flash -= dt;
     const dir = Math.sign(P.x - f.x) || 1;
     if(f.knock){ f.x += f.knock * dt; f.knock *= 0.86; if(Math.abs(f.knock) < 6) f.knock = 0; }
-    else f.x += dir * f.sp * pulse * dt;              // 拍の あたまで ぴょんと 出る
+    else{
+      const nx = f.x + dir * f.sp * pulse * dt;       // 拍の あたまで ぴょんと 出る
+      // 自分からは 穴に 入らない。ふちで 足ぶみして 待つ（落とすのは こちらの しごと）
+      if(f.fly || f.y < -4 || !inPit(nx)) f.x = nx;
+    }
     if(!f.fly){                                   // 歩くやつは 穴に落ちる（押しこめば やっつけたことになる）
       if(inPit(f.x) || f.y < 0){
         f.vy = (f.vy || 0) + GRAV * dt; f.y += f.vy * dt;
@@ -697,6 +747,7 @@ function frame(now){
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   acc += dt;
   if(paused) acc = 0;
+  if(bgm) setVol();
   while(acc >= STEP){ step(STEP); acc -= STEP; }
   schedule();
 
