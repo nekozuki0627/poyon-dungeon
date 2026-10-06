@@ -111,7 +111,9 @@ for(let i = 0; i < 4; i++) img("run" + i, "run/slime_1_" + i + ".png");
 img("bg",    "stage/slime_2.jpg");
 img("floor", "stage_obj/slime_2_floor.jpg");
 img("bat",   "stage_obj/slime_2_bat.png");
-img("foe",   "evo_beast_2.png");
+img("rock",  "arena/foe_rock.png");     // 岩の小鬼
+img("mush",  "arena/foe_mush.png");     // きのこのおばけ
+img("boss",  "arena/boss_golem.png");   // 洞くつのぬし
 img("gem",   "prop_01.png");
 img("plat",  "stage_obj/slime_2_plat.png");
 img("spike", "stage_obj/slime_2_spike1.png");
@@ -200,7 +202,7 @@ function offerPerks(){
 /* ---- ボス ---- */
 const BOSS_X = 5500;
 function spawnBoss(){
-  boss = { x: BOSS_X + 240, y: 0, fly: false, boss: true, hp: 26, hpMax: 26, sp: 48,
+  boss = { x: BOSS_X + 240, y: 0, fly: false, boss: true, kind: "boss", hp: 26, hpMax: 26, sp: 48,
            knock: 0, flash: 0, dead: false, t: 0, cast: 2 };
   foes.push(boss);
   pops.push({ x: P.x, y: -120, t: 0, dx: 0, text: "ぬしが きた！", col: "#C0506A" });
@@ -386,9 +388,12 @@ function spawnFoe(){
   const x = P.x + side * (W * 0.7 + Math.random() * 200);
   if(x < 40 || x > world.len - 40) return;
   if(inPit(x)) return;
-  const fly = Math.random() < 0.4;
-  foes.push({ x, y: fly ? -120 - Math.random() * 60 : 0, fly, hp: fly ? 1 : 2,
-              sp: fly ? 70 + Math.random() * 40 : 55 + Math.random() * 35,
+  const r = Math.random();
+  const kind = r < 0.34 ? "bat" : r < 0.67 ? "rock" : "mush";
+  const fly = kind === "bat";
+  foes.push({ x, y: fly ? -120 - Math.random() * 60 : 0, fly, kind,
+              hp: kind === "rock" ? 2 : 1,
+              sp: fly ? 70 + Math.random() * 40 : kind === "rock" ? 48 + Math.random() * 24 : 74 + Math.random() * 34,
               knock: 0, flash: 0, dead: false, t: Math.random() * 6 });
 }
 
@@ -448,7 +453,7 @@ function step(dt){
     boss.cast -= dt;
     if(boss.cast <= 0){                               // 4拍ごとに コウモリを よぶ
       boss.cast = SPB * 8;
-      for(let i = -1; i <= 1; i++) foes.push({ x: boss.x - 40, y: -90 + i * 34, fly: true, hp: 1, sp: 120, knock: 0, flash: 0, dead: false, t: 0 });
+      for(let i = -1; i <= 1; i++) foes.push({ x: boss.x - 40, y: -90 + i * 34, fly: true, kind: "bat", hp: 1, sp: 120, knock: 0, flash: 0, dead: false, t: 0 });
       sfx(140, .3, "sawtooth", .08, 1.6);
     }
   }
@@ -599,8 +604,8 @@ function drawFoes(){
     if(f.dead) continue;
     const x = f.x - cam;
     if(x < -80 || x > W + 80) continue;
-    const im = f.fly ? IMG.bat : IMG.foe;
-    const hh = f.boss ? 128 : f.fly ? 42 : 56;
+    const im = IMG[f.kind] || IMG.bat;
+    const hh = f.boss ? 128 : f.fly ? 42 : f.kind === "mush" ? 60 : 54;
     const w = hh * ((ready(im) ? im.naturalWidth / im.naturalHeight : 1.2));
     if(!f.fly){ ctx.fillStyle = "rgba(60,36,28,.28)"; ctx.beginPath(); ctx.ellipse(x, GY + 2, w * .4, 5, 0, 0, 7); ctx.fill(); }
     ctx.save();
