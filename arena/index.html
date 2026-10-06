@@ -71,6 +71,10 @@
   <a class="go" href="../index.html" onclick="sleepAudio()">おうちへ もどる</a>
   <button class="again" onclick="location.reload()">もういちど</button>
 </div></div>
+<div id="away" class="sheet"><div class="inner">
+  <div class="ttl">ひとやすみ</div>
+  <div class="sub">画面を さわると 続きから</div>
+</div></div>
 <div id="hint">画面の左がわを 指でなぞると 左右に動く</div>
 <div id="hintPc">PCは　A / D ＝左右　　W か スペース ＝とぶ　　J か X ＝こうげき</div>
 
@@ -365,10 +369,26 @@ function wakeAudio(){
     });
   }catch(e){}
 }
-document.addEventListener("visibilitychange", () => { if(document.hidden) sleepAudio(); else wakeAudio(); });
+/* 見ていない あいだは 音を止めて ゲームも とめる。
+   ほかの まどを 触っているのに 音だけ 鳴りつづける、を なくすため */
+let awayPause = false, idle = 0;
+function goAway(){
+  sleepAudio();
+  if(!over && !awayPause && !document.getElementById("lvup").classList.contains("show")){
+    awayPause = true; paused = true;
+    const z = document.getElementById("away"); if(z) z.classList.add("show");
+  }
+}
+function comeBack(){                                  // 何か 触ったら 続きから
+  idle = 0;
+  if(!awayPause) return;
+  awayPause = false; paused = false;
+  const z = document.getElementById("away"); if(z) z.classList.remove("show");
+  wakeAudio();
+}
+document.addEventListener("visibilitychange", () => { if(document.hidden) goAway(); });
 addEventListener("pagehide", sleepAudio);
-addEventListener("blur", sleepAudio);
-addEventListener("focus", wakeAudio);
+addEventListener("blur", goAway);
 /** いま 何拍目か（小数つき）。音が まだなら 時計で代用 */
 function beatNow(){
   if(actx && musicT0 !== null) return (actx.currentTime - musicT0) / SPB;
@@ -745,6 +765,8 @@ function drawHud(){
 let last = performance.now(), acc = 0;
 function frame(now){
   const dt = Math.min(.05, (now - last) / 1000); last = now;
+  idle += dt;
+  if(idle > 25) goAway();                             // 25秒 さわらなければ ひとりでに 止まる
   acc += dt;
   if(paused) acc = 0;
   if(bgm) setVol();
@@ -776,8 +798,8 @@ function hideHint(){
     for(const id of ["hint", "hintPc"]){ const h = document.getElementById(id); if(h) h.style.display = "none"; }
   }, 2500);
 }
-addEventListener("pointerdown", () => { startAudio(); hideHint(); });
-addEventListener("keydown", () => { startAudio(); hideHint(); });
+addEventListener("pointerdown", () => { comeBack(); startAudio(); hideHint(); });
+addEventListener("keydown", () => { comeBack(); startAudio(); hideHint(); });
 </script>
 </body>
 </html>
