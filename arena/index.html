@@ -22,7 +22,12 @@
   .pad:active,.pad.on{ transform:translateY(3px); box-shadow:0 2px 0 rgba(89,66,54,.35) }
   #jumpBtn{ bottom:calc(132px + env(safe-area-inset-bottom)); background:radial-gradient(circle at 35% 30%,#9FF3F0,#2CB3AD) }
   #atkBtn { bottom:calc(26px + env(safe-area-inset-bottom)); background:radial-gradient(circle at 35% 30%,#FFB27A,#E86A2F) }
-  #hint{ position:fixed; left:0; right:0; bottom:calc(18px + env(safe-area-inset-bottom)); text-align:center;
+  #hintPc{ display:none }
+  @media (hover:hover) and (pointer:fine){      /* マウスのある画面＝PCのときだけ出す */
+    #hint{ display:none }
+    #hintPc{ display:block }
+  }
+  #hint,#hintPc{ position:fixed; left:0; right:0; bottom:calc(18px + env(safe-area-inset-bottom)); text-align:center;
     font-size:12px; font-weight:800; color:#F3E6FF; text-shadow:0 2px 0 rgba(0,0,0,.4); z-index:4; pointer-events:none }
 </style>
 </head>
@@ -31,6 +36,7 @@
 <button class="pad" id="jumpBtn" aria-label="とぶ"><span class="ic">⬆</span>とぶ</button>
 <button class="pad" id="atkBtn" aria-label="こうげき"><span class="ic">⚔</span>こうげき</button>
 <div id="hint">画面の左がわを 指でなぞると 左右に動く</div>
+<div id="hintPc">PCは　A / D ＝左右　　W か スペース ＝とぶ　　J か X ＝こうげき</div>
 
 <script>
 "use strict";
@@ -100,11 +106,15 @@ btn("jumpBtn", () => jump());
 btn("atkBtn",  () => attack());
 addEventListener("keydown", e => {
   if(e.repeat) return;
-  if(e.code === "Space" || e.code === "ArrowUp") jump();
-  if(e.code === "KeyX" || e.code === "Enter") attack();
+  if(e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") jump();
+  if(e.code === "KeyX" || e.code === "KeyJ" || e.code === "Enter") attack();
 });
 const key = {};
-addEventListener("keydown", e => key[e.code] = true);
+const HOLD = ["KeyA", "KeyD", "ArrowLeft", "ArrowRight", "Space", "KeyW", "ArrowUp", "KeyX", "KeyJ"];
+addEventListener("keydown", e => {
+  if(HOLD.indexOf(e.code) >= 0) e.preventDefault();   // 画面が動いたりボタンが押されたりしないように
+  key[e.code] = true;
+});
 addEventListener("keyup",   e => key[e.code] = false);
 
 function jump(){
@@ -170,8 +180,8 @@ function step(dt){
   // 左右：指のずれぶんだけ、じわっと加速する
   let want = 0;
   if(dragId !== null) want = Math.max(-1, Math.min(1, (dragX - dragX0) / 55));
-  if(key.ArrowLeft) want = -1;
-  if(key.ArrowRight) want = 1;
+  if(key.ArrowLeft  || key.KeyA) want = -1;
+  if(key.ArrowRight || key.KeyD) want = 1;
   if(want !== 0){
     P.vx += want * RUN_A * dt;
     P.face = want > 0 ? 1 : -1;
@@ -374,11 +384,15 @@ requestAnimationFrame(frame);
 
 // 最初の説明は、動かしたら消す
 let moved = false;
-addEventListener("pointerdown", () => {
+function hideHint(){
   if(moved) return;
   moved = true;
-  setTimeout(() => { const h = document.getElementById("hint"); if(h) h.style.display = "none"; }, 2500);
-});
+  setTimeout(() => {
+    for(const id of ["hint", "hintPc"]){ const h = document.getElementById(id); if(h) h.style.display = "none"; }
+  }, 2500);
+}
+addEventListener("pointerdown", hideHint);
+addEventListener("keydown", hideHint);
 </script>
 </body>
 </html>
