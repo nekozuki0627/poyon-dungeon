@@ -42,6 +42,16 @@
     font-family:inherit; font-size:17px; font-weight:900; text-decoration:none; box-shadow:0 5px 0 rgba(89,66,54,.4) }
   .go{ background:linear-gradient(#9FF3F0,#2CB3AD); color:#fff; text-shadow:0 2px 0 rgba(89,66,54,.5) }
   .again{ background:linear-gradient(#FFF8EC,#FFE9CF); color:#594236 }
+  .rotic{ font-size:54px; animation:tilt 1.8s ease-in-out infinite; display:inline-block; margin-bottom:6px }
+  @keyframes tilt{ 0%,40%{ transform:rotate(0) } 60%,100%{ transform:rotate(-90deg) } }
+  @media (orientation:portrait){ body:not(.rotok) #rot{ display:flex } }
+  /* よこむきは 高さが 足りないので ボタンを 小さめに */
+  @media (orientation:landscape) and (max-height:520px){
+    .pad{ width:74px; height:74px; font-size:12px }
+    .pad .ic{ font-size:24px }
+    #jumpBtn{ bottom:calc(104px + env(safe-area-inset-bottom)) }
+    #atkBtn { bottom:calc(18px + env(safe-area-inset-bottom)) }
+  }
   #muteBtn{ position:fixed; z-index:8; top:max(10px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right));
     width:40px; height:40px; border-radius:50%; border:2px solid rgba(89,66,54,.5);
     background:rgba(255,255,255,.75); font-size:19px; line-height:1; padding:0 }
@@ -71,6 +81,11 @@
   <a class="go" href="../index.html" onclick="sleepAudio()">おうちへ もどる</a>
   <button class="again" onclick="location.reload()">もういちど</button>
 </div></div>
+<div id="rot" class="sheet"><div class="inner">
+  <div class="rotic">📱</div>
+  <div class="ttl">よこむきに すると<br>ずっと あそびやすいよ</div>
+  <button class="again" id="rotOk">このまま あそぶ</button>
+</div></div>
 <div id="away" class="sheet"><div class="inner">
   <div class="ttl">ひとやすみ</div>
   <div class="sub">画面を さわると 続きから</div>
@@ -85,7 +100,11 @@
    ねらい：横スクロールのまま「左右に動く・跳ぶ・たたかう」の手ざわりを見てもらう。
    本編（ぽよんダンジョン）とは別物。絵だけ本編のものを借りている。
    ========================================================= */
-const W = 420;              // 見える横幅（高さは画面に合わせる）
+/* 見える広さ。「世界の高さ」を決めて、横幅は 画面の形から きめる。
+   よこむきなら 自然と 横に広くなる＝先が よく見える（ゆま 10/7「全体的に大きくない？」） */
+const HL = 470;             // 見える世界の 高さ
+const BASE = 375 / 420;     // 文字の 大きさを そろえる ための もとの ばい率
+let W = 560, UI = 1;
 const GROUND = 0.78;        // 地面の位置（画面の高さに対する割合）
 const GRAV = 2300, JUMP_V = 760, RUN_A = 2600, RUN_MAX = 300, FRICT = 2000;
 const ATK_TIME = 0.22, ATK_CD = 0.3, ATK_RANGE = 86;
@@ -104,14 +123,27 @@ let dpr = 1, scale = 1, H = 700, GY = 500, offX = 0;
 function resize(){
   dpr = Math.min(2, window.devicePixelRatio || 1);
   const cw = window.innerWidth, ch = window.innerHeight;
-  scale = cw / W;
+  let sc = ch / HL, w = cw / sc;
+  if(w < 560){ w = 560; sc = cw / w; }            // たてむきでも これ以上は せまくしない
+  if(w > 1160){ w = 1160; sc = cw / w; }          // 広すぎても 見づらい
+  scale = sc; W = w; UI = BASE / sc;
   H = ch / scale;
   GY = H * GROUND;
   offX = 0;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
   cv.style.width = cw + "px"; cv.style.height = ch + "px";
 }
-addEventListener("resize", resize); resize();
+addEventListener("resize", resize);
+addEventListener("orientationchange", resize);
+resize();
+let lastW = 0, lastH = 0;
+/* 画面の 向きが 変わったのに 知らせが 来ないことが あるので、毎コマ 見はる */
+function watchSize(){
+  if(window.innerWidth === lastW && window.innerHeight === lastH) return;
+  lastW = window.innerWidth; lastH = window.innerHeight;
+  resize();
+  if(typeof rotCheck === "function") rotCheck();
+}
 
 /* ---- 絵（本編のものを借りる） ---- */
 const IMG = {};
@@ -166,6 +198,10 @@ const foes = [], gems = [], pops = [], parts = [];
 const PW = 15;                                   // スライムの 横はば（半分）
 let cam = 0, time = 0, killed = 0, picked = 0, spawnT = 1.2;
 let paused = false, lv = 1, exp = 0, need = 4, boss = null, over = false;
+/* 止める理由は いくつか かさなる（カード選び・ほかの窓・たてむき・おしまい）。
+   ぜんぶ 無くなって はじめて 動きだす */
+const pauseWhy = new Set();
+function pause(why, on){ if(on) pauseWhy.add(why); else pauseWhy.delete(why); paused = pauseWhy.size > 0; }
 buildWorld();
 
 /* ---- レベルアップの 3つから ひとつ（ダダサバのあれ） ---- */
@@ -188,7 +224,7 @@ function offerPerks(){
   const pick = [];
   while(pick.length < 3 && pool.length){ pick.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]); }
   if(!pick.length) return;
-  paused = true;
+  pause("lv", true);
   const box = document.getElementById("cards");
   box.innerHTML = "";
   for(const p of pick){
@@ -199,7 +235,7 @@ function offerPerks(){
       ev.preventDefault(); ev.stopPropagation();
       p.go(); took[p.id] = (took[p.id] || 0) + 1;
       document.getElementById("lvup").classList.remove("show");
-      paused = false;
+      pause("lv", false);
       sfx(880, .12, "triangle", .08, 1.5);
       pops.push({ x: P.x, y: P.y - 90, t: 0, dx: 0, text: p.name, col: "#2CB3AD" });
     });
@@ -235,7 +271,7 @@ function win(){
     document.getElementById("winGot").textContent = got;
     document.getElementById("winAll").textContent = total;
     document.getElementById("winBox").classList.add("show");
-    paused = true;
+    pause("win", true);
   }, 1300);
 }
 
@@ -277,6 +313,16 @@ document.getElementById("muteBtn").addEventListener("pointerdown", e => {
   e.preventDefault(); e.stopPropagation(); startAudio(); toggleMute();
 });
 document.getElementById("muteBtn").textContent = muted ? "🔇" : "🔊";
+/* たてむきの あいだは 止めておく。「このまま あそぶ」を 押したら そのまま */
+let rotOk = false;
+const mqP = window.matchMedia("(orientation: portrait)");
+function rotCheck(){ pause("rot", mqP.matches && !rotOk); }
+document.getElementById("rotOk").addEventListener("pointerdown", e => {
+  e.preventDefault(); e.stopPropagation();
+  rotOk = true; document.body.classList.add("rotok"); rotCheck();
+});
+if(mqP.addEventListener) mqP.addEventListener("change", rotCheck); else mqP.addListener(rotCheck);
+rotCheck();
 btn("jumpBtn", () => jump());
 btn("atkBtn",  () => attack());
 addEventListener("keydown", e => {
@@ -375,14 +421,14 @@ let awayPause = false, idle = 0;
 function goAway(){
   sleepAudio();
   if(!over && !awayPause && !document.getElementById("lvup").classList.contains("show")){
-    awayPause = true; paused = true;
+    awayPause = true; pause("away", true);
     const z = document.getElementById("away"); if(z) z.classList.add("show");
   }
 }
 function comeBack(){                                  // 何か 触ったら 続きから
   idle = 0;
   if(!awayPause) return;
-  awayPause = false; paused = false;
+  awayPause = false; pause("away", false);
   const z = document.getElementById("away"); if(z) z.classList.remove("show");
   wakeAudio();
 }
@@ -715,8 +761,8 @@ function drawPops(dt){
     p.x += (p.dx || 0) * dt;
     const k = p.t / .8;
     ctx.globalAlpha = Math.max(0, 1 - k);
-    ctx.font = `900 ${15 + (1 - k) * 5}px sans-serif`;
-    ctx.lineWidth = 5; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(255,255,255,.95)";
+    ctx.font = `900 ${(15 + (1 - k) * 5) * UI}px sans-serif`;
+    ctx.lineWidth = 5 * UI; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(255,255,255,.95)";
     const x = p.x - cam, y = GY + p.y - k * 30;
     ctx.strokeText(p.text, x, y); ctx.fillStyle = p.col; ctx.fillText(p.text, x, y);
   }
@@ -725,39 +771,40 @@ function drawPops(dt){
 }
 function drawHud(){
   ctx.textAlign = "left"; ctx.textBaseline = "top";
+  const u = UI;
   const label = (t, x, y, size, col) => {
-    ctx.font = `900 ${size}px sans-serif`; ctx.lineWidth = 5; ctx.lineJoin = "round";
+    ctx.font = `900 ${size * u}px sans-serif`; ctx.lineWidth = 5 * u; ctx.lineJoin = "round";
     ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.strokeText(t, x, y);
     ctx.fillStyle = col; ctx.fillText(t, x, y);
   };
-  label("♥".repeat(P.hp) + "♡".repeat(Math.max(0, 5 - P.hp)), 12, 12, 18, "#FF6F9C");
-  label(`💎 ${picked}`, 12, 38, 16, "#2E7C9E");
-  label(`たおした ${killed}`, 12, 62, 14, "#C98016");
-  label(`Lv ${lv}`, 12, 86, 15, "#6B4FA0");
+  label("♥".repeat(P.hp) + "♡".repeat(Math.max(0, ST.hpMax - P.hp)), 12 * u, 12 * u, 18, "#FF6F9C");
+  label(`💎 ${picked}`, 12 * u, 38 * u, 16, "#2E7C9E");
+  label(`たおした ${killed}`, 12 * u, 62 * u, 14, "#C98016");
+  label(`Lv ${lv}`, 12 * u, 86 * u, 15, "#6B4FA0");
   // 経験の たまり ぐあい
-  ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(12, 106, 92, 7);
-  ctx.fillStyle = "#6B4FA0"; ctx.fillRect(12, 106, 92 * Math.min(1, exp / need), 7);
-  ctx.strokeStyle = "rgba(89,66,54,.5)"; ctx.lineWidth = 1.5; ctx.strokeRect(12, 106, 92, 7);
+  ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(12 * u, 106 * u, 92 * u, 7 * u);
+  ctx.fillStyle = "#6B4FA0"; ctx.fillRect(12 * u, 106 * u, 92 * u * Math.min(1, exp / need), 7 * u);
+  ctx.strokeStyle = "rgba(89,66,54,.5)"; ctx.lineWidth = 1.5 * u; ctx.strokeRect(12 * u, 106 * u, 92 * u, 7 * u);
 
   // 拍の めやす。まるが ぴたっと 小さくなった ときが ぴったり
-  const d = offBeat(), k = Math.min(1, d / 0.5), bx = W / 2, by = 30;
+  const d = offBeat(), k = Math.min(1, d / 0.5), bx = W / 2, by = 30 * u, r0 = 11 * u;
   ctx.save();
   ctx.globalAlpha = .9;
-  ctx.strokeStyle = d < JUST ? "#2CB3AD" : "rgba(255,255,255,.8)"; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(bx, by, 11, 0, 7); ctx.stroke();
-  ctx.beginPath(); ctx.arc(bx, by, 11 + k * 15, 0, 7); ctx.globalAlpha = .5 - k * .4; ctx.stroke();
+  ctx.strokeStyle = d < JUST ? "#2CB3AD" : "rgba(255,255,255,.8)"; ctx.lineWidth = 3 * u;
+  ctx.beginPath(); ctx.arc(bx, by, r0, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(bx, by, r0 + k * 15 * u, 0, 7); ctx.globalAlpha = .5 - k * .4; ctx.stroke();
   ctx.globalAlpha = 1;
   ctx.fillStyle = d < JUST ? "#2CB3AD" : "rgba(255,255,255,.55)";
-  ctx.beginPath(); ctx.arc(bx, by, 11 - k * 7, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(bx, by, r0 - k * 7 * u, 0, 7); ctx.fill();
   ctx.restore();
 
   // ぬしの 体力
   if(boss && !boss.dead && Math.abs(boss.x - P.x) < 700){
-    const w = W - 80, x = 40, y = 54;
-    ctx.fillStyle = "rgba(28,20,42,.6)"; ctx.fillRect(x - 2, y - 2, w + 4, 14);
-    ctx.fillStyle = "#C0506A"; ctx.fillRect(x, y, w * Math.max(0, boss.hp / boss.hpMax), 10);
-    ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, 10);
-    ctx.textAlign = "center"; label("ぬし", W / 2, y + 12, 12, "#FFD9E2"); ctx.textAlign = "left";
+    const w = Math.min(W - 80 * u, 320 * u), x = (W - w) / 2, y = 54 * u;
+    ctx.fillStyle = "rgba(28,20,42,.6)"; ctx.fillRect(x - 2 * u, y - 2 * u, w + 4 * u, 14 * u);
+    ctx.fillStyle = "#C0506A"; ctx.fillRect(x, y, w * Math.max(0, boss.hp / boss.hpMax), 10 * u);
+    ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 2 * u; ctx.strokeRect(x, y, w, 10 * u);
+    ctx.textAlign = "center"; label("ぬし", W / 2, y + 12 * u, 12, "#FFD9E2"); ctx.textAlign = "left";
   }
 }
 
@@ -765,6 +812,7 @@ function drawHud(){
 let last = performance.now(), acc = 0;
 function frame(now){
   const dt = Math.min(.05, (now - last) / 1000); last = now;
+  watchSize();
   idle += dt;
   if(idle > 25) goAway();                             // 25秒 さわらなければ ひとりでに 止まる
   acc += dt;
