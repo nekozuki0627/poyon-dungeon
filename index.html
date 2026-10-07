@@ -2716,6 +2716,12 @@ function newChild(){
 function onPress(e){
   if(e && e.target && e.target.id === "mute") return;
   if(game.ui === "story"){ if($("stChoice").classList.contains("hide")) nvAdvance(); return; }
+  // はじめの画面でも、看板は見えているのに さわれなかった（ゆま 10/7）。
+  // 続きがある人だけ、看板を押したら そのまま ショップへ
+  if(game.ui === "start"){
+    if(e && onShopSign(e) && store.get("poyon_intro_done", false)){ SFX.pet(); leaveStart(); openStore(); }
+    return;
+  }
   if(game.ui) return;
   if(e && e.target && e.target.id === "reviveBtn") return;
   if(game.mode === "ad") return;
@@ -2745,8 +2751,9 @@ function toGame(e){
 // ショップの看板（右の壁に吊るしてある）とおもちゃの場所
 const SHOP_SIGN = { x: W - 58, y: 0, w: 84, h: 64 };   // y は描くときに決まる
 function onShopSign(e){
-  const q = toGame(e), sg = SHOP_SIGN;
-  return q.x > sg.x - sg.w / 2 && q.x < sg.x + sg.w / 2 && q.y > sg.y && q.y < sg.y + sg.h;
+  // 看板の高さは 描くときに決まるが、まだ描いていなくても さわれるように ここでも出す
+  const q = toGame(e), sg = SHOP_SIGN, top = GY - 190;
+  return q.x > sg.x - sg.w / 2 && q.x < sg.x + sg.w / 2 && q.y > top && q.y < top + sg.h;
 }
 const toyX = it => W / 2 + it.spot * 62;
 function onToy(e){
@@ -4609,6 +4616,13 @@ function frame(now){
 
 showTitle();
 openStart();
+// 別の画面（アリーナ）から「ショップへ」で来たとき
+try{
+  if(/[?&]shop=1/.test(location.search) && store.get("poyon_intro_done", false)){
+    leaveStart(); openStore();
+    history.replaceState(null, "", location.pathname);
+  }
+}catch(e){}
 adInit();
 requestAnimationFrame(frame);
 </script>

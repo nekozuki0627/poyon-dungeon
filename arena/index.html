@@ -39,7 +39,8 @@
   .card .nm{ font-size:17px; font-weight:900 }
   .card .nt{ font-size:12px; font-weight:700; color:#8A7260; margin-top:2px }
   .go,.again{ display:block; width:100%; margin-top:10px; padding:13px; border-radius:16px; border:3px solid #594236;
-    font-family:inherit; font-size:17px; font-weight:900; text-decoration:none; box-shadow:0 5px 0 rgba(89,66,54,.4) }
+    font-family:inherit; font-size:17px; font-weight:900; text-decoration:none; text-align:center; box-sizing:border-box;
+    box-shadow:0 5px 0 rgba(89,66,54,.4) }
   .go{ background:linear-gradient(#9FF3F0,#2CB3AD); color:#fff; text-shadow:0 2px 0 rgba(89,66,54,.5) }
   .again{ background:linear-gradient(#FFF8EC,#FFE9CF); color:#594236 }
   .rotic{ font-size:54px; animation:tilt 1.8s ease-in-out infinite; display:inline-block; margin-bottom:6px }
@@ -78,7 +79,8 @@
   <div class="ttl">ぬしを たおした！</div>
   <div class="big">もちかえった石　<span id="winGot">0</span></div>
   <div class="sub">小屋の ぜんぶで　<span id="winAll">0</span> こ</div>
-  <a class="go" href="../index.html" onclick="sleepAudio()">おうちへ もどる</a>
+  <a class="go" href="../index.html?shop=1" onclick="sleepAudio()">ショップで つかう</a>
+  <a class="again" href="../index.html" onclick="sleepAudio()">おうちへ もどる</a>
   <button class="again" onclick="location.reload()">もういちど</button>
 </div></div>
 <div id="rot" class="sheet"><div class="inner">
