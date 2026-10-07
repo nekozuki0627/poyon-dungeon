@@ -142,6 +142,14 @@ html.wide #titleView .pettitle{color:#594236;text-shadow:0 1px 0 rgba(255,255,25
 .hs-pic img{width:100%;height:100%;object-fit:cover;display:block}
 .hs-text{padding:14px 16px 6px;font-size:15px;font-weight:800;color:#594236;line-height:1.75;text-align:left}
 .hs-tap{padding:0 16px 12px;font-size:11px;font-weight:800;color:#9A8ABC;text-align:right}
+.st-ttl{padding:12px 16px 0;font-size:16px;font-weight:900;color:#C98016;text-align:left}
+#stBody div{margin-bottom:2px}
+.st-cell{display:flex;gap:10px;align-items:center;width:100%;margin-top:8px;padding:8px 10px;border:2px solid #E3D4C3;border-radius:14px;background:#FFF8EE;text-align:left;font-family:inherit}
+.st-cell.locked{opacity:.55;background:#F1EAE2}
+.st-cell img{width:52px;height:40px;object-fit:cover;border-radius:8px;border:2px solid #E3D4C3;background:#2A2238;flex:none}
+.st-cell .no{width:52px;height:40px;border-radius:8px;border:2px dashed #CBBBA8;flex:none;display:flex;align-items:center;justify-content:center;color:#A99782;font-weight:900}
+.st-cell b{font-size:14px;font-weight:900;color:#594236;display:block}
+.st-cell small{font-size:11px;font-weight:800;color:#9A8ABC}
 
 /* ---- こんぷりーとBOOK ---- */
 .zk-rate{margin:6px 0 4px;font-size:13px;font-weight:900;color:#594236}
@@ -622,6 +630,16 @@ body.cinema #atkBtn{display:none}
     <div class="hs-pic"><img id="hsImg" alt=""><canvas id="hsPet"></canvas></div>
     <div class="hs-text" id="hsText"></div>
     <div class="hs-tap">タップで とじる</div>
+  </div>
+</div>
+
+<!-- 買いものでひらく「のこしていったもの」 -->
+<div class="overlay hide" id="stillView">
+  <div class="hs-card">
+    <div class="hs-pic"><img id="stImg" alt=""></div>
+    <div class="st-ttl" id="stTtl"></div>
+    <div class="hs-text" id="stBody"></div>
+    <div class="hs-tap">タップで つづき</div>
   </div>
 </div>
 
@@ -1538,6 +1556,84 @@ const SHOP_TOY = [
   { id: "blocks",   name: "つみき",         price: 50, spot: -1.7, say: "{n}は、つみきをひとつだけ、そっと積んだ。" },
   { id: "plush",    name: "ぬいぐるみ",     price: 80, spot:  1.7, say: "{n}は、ぬいぐるみにぴったりくっついて離れない。" },
 ];
+/* 買いものでひらく「のこしていったもの」＝回収用のスチル（ゆま 10/7）。
+   この小屋に前にいた子たちが、出ていくときに置いていったもの の話。
+   どれから買っても困らないように1枚ずつで完結させ、ぜんぶ集めた人にだけ最後の1枚を出す。
+   しんどさは残すが、ぜんぶ読むと「送り出す場所」の話に着地する。 */
+const STILLS = [
+  { id: "candy", t: "ひとつだけの 包み紙", s: [
+    "棚のいちばん奥に、銀の包み紙が 一枚だけ 残っていた。",
+    "しわの寄りかたで、ずいぶん長く にぎられていたのが わかる。",
+    "ここにいた子も、ほっぺの中で ころころ 転がしていたらしい。" ] },
+  { id: "soup", t: "なべの ふちの こげあと", s: [
+    "古いなべの ふちに、小さな こげあとが ひとつ。",
+    "雨がつめたい日は、きのこを 多めに入れるのが きまりだったそうだ。",
+    "ふうふうする音が、まだ 天井のあたりに 残っている気がする。" ] },
+  { id: "jelly", t: "窓辺の にじ", s: [
+    "晴れた日の昼すぎ、ガラス皿のあった場所にだけ にじが落ちる。",
+    "「くもりの日は つくらない」。だれかが決めた、よくわからない きまり。",
+    "守る人は もういないのに、小屋だけが まだ 守っている。" ] },
+  { id: "cake", t: "ろうそくの 箱", s: [
+    "屋根うらの箱に、使いかけの ろうそくが 八本。",
+    "長さが ぜんぶ ちがうのは、毎年 一本ずつ 増やしたから。",
+    "八回ぶんの「おめでとう」が、ここに しまわれている。" ] },
+  { id: "ball", t: "ゆかの へこみ", s: [
+    "ゆか板の まんなかが、まるく へこんでいる。",
+    "何千回も、同じところで 跳ねた あとだ。",
+    "小屋は、うるさかった日のことを ちゃんと おぼえている。" ] },
+  { id: "windmill", t: "すきま風の くせ", s: [
+    "窓のすきまから入る風は、いつも 同じ向きに まわろうとする。",
+    "そこに かざぐるまが あった ころの くせが、抜けていないらしい。",
+    "風だけが、まだ あそぼうと さそっている。" ] },
+  { id: "blocks", t: "ゆかの 鉛筆書き", s: [
+    "ゆかの すみに、小さな字で 1・2・3 と 書いてある。",
+    "つみきを 積む 順番。ここだけは ぜったいに まちがえたくなかったらしい。",
+    "消さずに 残っているのは、だれも 消さなかったから。" ] },
+  { id: "plush", t: "かたほうだけ 色のうすい耳", s: [
+    "ぬいぐるみの 耳は、かたほうだけ 色が うすい。",
+    "ずっと 同じ側を 抱いて ねむっていた、ということ。",
+    "置いていくとき、その子は どんな顔を していたんだろう。" ] },
+  { id: "_last", t: "灯りを つける 夜", s: [
+    "この小屋は、ずっと「送り出す場所」だった。",
+    "みんな 大きくなって 出ていって、だれも 帰ってこない。",
+    "のこしていったもので、小屋のなかは こんなにも あたたかいのに。",
+    "——けれど 年に一度、窓の灯りを つけた夜だけ。",
+    "遠くの山のほうから、小さな光が いくつも いくつも、返事をする。" ] },
+];
+const STILL_LAST = "_last";
+let stills = store.get("poyon_stills", []);
+function saveStills(){ store.set("poyon_stills", stills); }
+function hasStill(id){ return stills.indexOf(id) >= 0; }
+/** 買いものの1回目だけ ひらく。ぜんぶ そろったら 最後の1枚も つづけて */
+function unlockStill(id){
+  if(hasStill(id)) return;
+  stills.push(id); saveStills();
+  const q = [id];
+  const all = STILLS.filter(x => x.id !== STILL_LAST).every(x => hasStill(x.id));
+  if(all && !hasStill(STILL_LAST)){ stills.push(STILL_LAST); saveStills(); q.push(STILL_LAST); }
+  stillQueue = q;
+  setTimeout(nextStill, 800);                    // 買った反応を 見せてから
+}
+let stillQueue = [], stillBack = null;
+function nextStill(){
+  const id = stillQueue.shift();
+  if(id === undefined){
+    const b = stillBack; stillBack = null;
+    game.ui = null; $("stillView").classList.add("hide");
+    if(b === "book"){ game.ui = "book"; $("bookView").classList.remove("hide"); }
+    else refreshHome();
+    return;
+  }
+  openStill(id);
+}
+function openStill(id){
+  const st = STILLS.find(x => x.id === id); if(!st) return;
+  game.ui = "still";
+  $("stImg").src = `assets/still/${id === STILL_LAST ? "last" : id}.jpg`;
+  $("stTtl").textContent = st.t;
+  $("stBody").innerHTML = st.s.map(l => `<div>${l}</div>`).join("");
+  $("stillView").classList.remove("hide");
+}
 const shopImg = {};
 function shopIm(id){
   if(!shopImg[id]){ shopImg[id] = new Image(); shopImg[id].src = `assets/shop/${id}.png`; }
@@ -2612,6 +2708,13 @@ function openBook(){
 }
 function renderBook(){
   const tabs = $("bookTabs"); tabs.innerHTML = "";
+  {
+    const b = document.createElement("button");
+    b.className = "tab" + (bookLine === "_still" ? " on" : "");
+    b.textContent = "小屋のこと";
+    b.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); bookLine = "_still"; renderBook(); });
+    tabs.appendChild(b);
+  }
   for(const l of SLINES){
     if(l === "slime_hard" && story.slime_hard < 5) continue;   // むずかしいは、進んだ人にだけ見せる
     const b = document.createElement("button");
@@ -2621,6 +2724,24 @@ function renderBook(){
     tabs.appendChild(b);
   }
   const list = $("bookList"); list.innerHTML = "";
+  if(bookLine === "_still"){                       // 買いものでひらく、小屋の話
+    const got = STILLS.filter(x => hasStill(x.id)).length;
+    list.insertAdjacentHTML("beforeend",
+      `<div class="zk-rate">のこしていったもの <b>${got}</b> / ${STILLS.length}</div>`);
+    for(const st of STILLS){
+      const ok = hasStill(st.id), last = st.id === STILL_LAST;
+      const b = document.createElement("button");
+      b.className = "st-cell" + (ok ? "" : " locked");
+      b.innerHTML = (ok ? `<img src="assets/still/${last ? "last" : st.id}.jpg" alt="">` : `<div class="no">？</div>`)
+        + `<span><b>${ok ? st.t : "？？？"}</b><small>${ok ? "タップで よむ" : last ? "ぜんぶ あつめると ひらく" : "ショップで はじめて 買うと ひらく"}</small></span>`;
+      if(ok) b.addEventListener("pointerdown", e => {
+        e.stopPropagation(); e.preventDefault();
+        $("bookView").classList.add("hide"); stillBack = "book"; stillQueue = []; openStill(st.id);
+      });
+      list.appendChild(b);
+    }
+    return;
+  }
   const open = story[bookLine];
   for(let n = 1; n <= 5; n++){
     const b = document.createElement("button");
@@ -2715,6 +2836,7 @@ function newChild(){
 
 function onPress(e){
   if(e && e.target && e.target.id === "mute") return;
+  if(game.ui === "still"){ nextStill(); return; }
   if(game.ui === "story"){ if($("stChoice").classList.contains("hide")) nvAdvance(); return; }
   // はじめの画面でも、看板は見えているのに さわれなかった（ゆま 10/7）。
   // 続きがある人だけ、看板を押したら そのまま ショップへ
@@ -2842,6 +2964,7 @@ function renderStore(){
         closeStore(); refreshHome();
         homeReact("toy", it);
       }
+      unlockStill(it.id);          // はじめて買ったものだけ、小屋の話が ひらく
     });
     box.appendChild(el);
   }
@@ -3060,11 +3183,12 @@ function leaveStart(){
 function restartAll(){
   for(const k of ["poyon_pet_name", "poyon_pet_line", "poyon_pet_stage", "poyon_gems", "poyon_total",
                   "poyon_family", "poyon_story", "poyon_best_m", "poyon_bestdist_m", "poyon_lastdeath_m", "poyon_intro_done", "poyon_prog",
-                  "poyon_love", "poyon_toys"]){
+                  "poyon_love", "poyon_toys", "poyon_stills"]){
     try{ localStorage.removeItem(k); }catch(e){}
   }
   pet.name = NAMES0[Math.floor(Math.random() * NAMES0.length)];
   pet.line = "slime"; pet.stage = 1; pet.gems = 0; pet.total = 0; pet.love = 0; pet.toys = [];
+  stills = [];
   family.length = 0;
   story.slime = 1; story.beast = 1; story.human = 1; story.slime_hard = 1;
   prog.done = {}; prog.perfect = false; prog.seen = {}; prog.clears = 0; prog.played = {}; markSeen("slime", 1);
