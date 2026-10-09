@@ -98,7 +98,7 @@
   <button id="pin"><span>まず これ</span>のどが 痛くて 声が 出せません。これで 話します。</button>
 
   <div class="box">
-    <textarea id="tx" rows="4" placeholder="ここに うつと、よみあげます" autocomplete="off" autocapitalize="off"></textarea>
+    <textarea id="tx" rows="4" placeholder="ここに うつ（Enterで 改行できます）" autocomplete="off" autocapitalize="off"></textarea>
     <div class="row">
       <button class="go" id="say">🔊　よむ</button>
       <button class="mini" id="big" title="相手に見せる">👀</button>
@@ -125,7 +125,7 @@
     <label>はやさ <input type="range" id="rate" min="0.6" max="1.6" step="0.05" value="1"><span id="rateV">1.00</span></label>
     <label>たかさ <input type="range" id="pitch" min="0.6" max="1.6" step="0.05" value="1"><span id="pitchV">1.00</span></label>
     <label><input type="checkbox" id="autoBig"> よむとき じどうで 大きい字にする</label>
-    <p>打ったあと <b>Enter</b> でも よみます（改行は Shift+Enter）。<br>
+    <p><b>Enter</b> は 改行です。よむのは 🔊よむ ボタン（パソコンなら <b>Ctrl+Enter</b> でも）。<br>
     よく使った言葉は 自動で 上のほうに 出てきます。<br>
     「じぶん」のたなで、言いたいことを 足せます（この端末に おぼえます）。</p>
   </details>
@@ -372,7 +372,8 @@ function grow(){
 tx.addEventListener("input", () => { grow(); drawSug(); });
 addEventListener("resize", grow);
 tx.addEventListener("keydown", e => {
-  if(e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); speak(tx.value); }
+  // Enter は ふつうに 改行。よむのは ボタン（いそぐときは Ctrl+Enter）
+  if(e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing){ e.preventDefault(); speak(tx.value); }
 });
 
 /* ---- たな ---- */
