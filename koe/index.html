@@ -39,9 +39,9 @@
 
   .box{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px }
   textarea{ width:100%; border:none; outline:none; resize:none; background:transparent; color:var(--ink);
-    font-family:inherit; font-size:25px; line-height:1.55; min-height:132px; max-height:44vh; padding:6px 6px 2px;
-    overflow-y:auto }
-  textarea::placeholder{ color:var(--dim) }
+    font-family:inherit; font-size:32px; font-weight:600; line-height:1.5; min-height:168px; max-height:46vh;
+    padding:6px 6px 2px; overflow-y:auto }
+  textarea::placeholder{ color:var(--dim); font-size:20px; font-weight:500 }
   .row{ display:flex; gap:8px; margin-top:6px }
   .go{ flex:1; background:var(--rose); border-color:var(--rose-d); color:#fff; font-size:19px; padding:15px 12px }
   .mini{ padding:11px 14px }
@@ -366,8 +366,8 @@ function drawSug(){
 /** 打つほど たてに ひろがる（せますぎた ので） */
 function grow(){
   tx.style.height = "auto";
-  const max = Math.round(window.innerHeight * 0.44);
-  tx.style.height = Math.min(max, Math.max(132, tx.scrollHeight)) + "px";
+  const max = Math.round(window.innerHeight * 0.46);
+  tx.style.height = Math.min(max, Math.max(168, tx.scrollHeight)) + "px";
 }
 tx.addEventListener("input", () => { grow(); drawSug(); });
 addEventListener("resize", grow);
