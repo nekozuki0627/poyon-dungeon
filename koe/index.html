@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#CF7D74">
 <title>こえのかわり</title>
 <style>
   /* Arilloのローズ #CF7D74 を基調。点線罫線・角丸カード */
   :root{
     --rose:#CF7D74; --rose-d:#B5655D; --ink:#3A3A3A; --dim:#8A7F7C;
-    --bg:#FBF6F4; --card:#FFFFFF; --line:#E8D9D5; --ok:#5E9E8F;
+    --bg:#FBF6F4; --card:#FFFFFF; --line:#E8D9D5;
     color-scheme:light;
   }
   @media (prefers-color-scheme: dark){
@@ -20,27 +21,31 @@
   body{ background:var(--bg); color:var(--ink); font-size:16px; line-height:1.7;
     font-family:"Hiragino Sans","ヒラギノ角ゴ ProN",system-ui,sans-serif;
     padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
-  .wrap{ max-width:620px; margin:0 auto; padding:12px 14px 28px }
+  .wrap{ max-width:620px; margin:0 auto; padding:10px 14px 28px }
 
-  h1{ font-size:17px; font-weight:800; margin:2px 0 10px; color:var(--rose);
+  h1{ font-size:17px; font-weight:800; margin:2px 0 8px; color:var(--rose);
     display:flex; align-items:center; gap:8px }
   h1 small{ font-size:12px; font-weight:700; color:var(--dim); margin-left:auto }
 
-  /* 打つところ */
+  button{ font-family:inherit; font-weight:800; border-radius:13px; border:2px solid var(--line);
+    background:var(--card); color:var(--ink); padding:11px 12px; font-size:15px; cursor:pointer }
+  button:active{ transform:translateY(2px) }
+
+  /* いちばん上に すえおき */
+  #pin{ width:100%; margin-bottom:10px; padding:16px 14px; font-size:17px; line-height:1.5;
+    background:var(--rose); border-color:var(--rose-d); color:#fff; text-align:left;
+    box-shadow:0 4px 0 rgba(181,101,93,.35) }
+  #pin span{ display:block; font-size:11px; font-weight:800; opacity:.85; letter-spacing:.1em; margin-bottom:3px }
+
   .box{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:10px; margin-bottom:10px }
   textarea{ width:100%; border:none; outline:none; resize:none; background:transparent; color:var(--ink);
     font-family:inherit; font-size:21px; line-height:1.6; min-height:64px; padding:4px 6px }
   textarea::placeholder{ color:var(--dim) }
   .row{ display:flex; gap:8px; margin-top:6px }
-  button{ font-family:inherit; font-weight:800; border-radius:13px; border:2px solid var(--line);
-    background:var(--card); color:var(--ink); padding:11px 12px; font-size:15px; cursor:pointer }
-  button:active{ transform:translateY(2px) }
   .go{ flex:1; background:var(--rose); border-color:var(--rose-d); color:#fff; font-size:19px; padding:15px 12px }
-  .go:disabled{ opacity:.5 }
   .mini{ padding:11px 14px }
 
-  /* 予測候補 */
-  #sug{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; min-height:0 }
+  #sug{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px }
   #sug:empty{ display:none }
   .sg{ border:2px dashed var(--rose); color:var(--rose-d); background:var(--card);
     border-radius:999px; padding:9px 14px; font-size:16px; font-weight:700 }
@@ -50,8 +55,9 @@
     border-bottom:1px dashed var(--line); padding-bottom:5px }
   .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:7px }
   .tile{ text-align:center; padding:13px 6px; font-size:15px; line-height:1.4 }
-  .tile.big{ grid-column:1/-1; font-size:17px; padding:15px 10px; border-color:var(--rose); color:var(--rose-d) }
+  .tile.big{ grid-column:1/-1; font-size:16px; padding:14px 10px; border-color:var(--rose); color:var(--rose-d) }
   @media (prefers-color-scheme: dark){ .tile.big{ color:#F0B3AC } }
+  .tile .x{ display:inline-block; margin-left:6px; color:var(--dim); font-weight:900 }
 
   .tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px }
   .tab{ font-size:13px; padding:7px 13px; border-radius:999px }
@@ -60,7 +66,10 @@
   .hist{ display:flex; flex-direction:column; gap:6px }
   .hist button{ text-align:left; font-weight:600; font-size:15px; padding:10px 13px }
 
-  /* 相手に見せる大きい字 */
+  .add{ display:flex; gap:7px; margin-top:8px }
+  .add input{ flex:1; min-width:0; font-family:inherit; font-size:15px; padding:10px 12px;
+    border-radius:12px; border:2px solid var(--line); background:var(--card); color:var(--ink) }
+
   #show{ position:fixed; inset:0; background:var(--bg); z-index:50; display:none;
     align-items:center; justify-content:center; padding:24px; text-align:center }
   #show.on{ display:flex }
@@ -85,6 +94,8 @@
 
   <div id="warn" class="warn" hidden></div>
 
+  <button id="pin"><span>まず これ</span>のどが 痛くて 声が 出せません。これで 話します。</button>
+
   <div class="box">
     <textarea id="tx" rows="2" placeholder="ここに うつと、よみあげます" autocomplete="off" autocapitalize="off"></textarea>
     <div class="row">
@@ -99,6 +110,10 @@
   <h2>よく つかう</h2>
   <div class="tabs" id="tabs"></div>
   <div class="tiles" id="tiles"></div>
+  <div class="add" id="addBox" hidden>
+    <input id="addTx" placeholder="じぶんの ことばを 足す" autocomplete="off">
+    <button id="addGo">＋</button>
+  </div>
 
   <h2>さっき いったこと</h2>
   <div class="hist" id="hist"></div>
@@ -110,7 +125,8 @@
     <label>たかさ <input type="range" id="pitch" min="0.6" max="1.6" step="0.05" value="1"><span id="pitchV">1.00</span></label>
     <label><input type="checkbox" id="autoBig"> よむとき じどうで 大きい字にする</label>
     <p>打ったあと <b>Enter</b> でも よみます（改行は Shift+Enter）。<br>
-    よく使った言葉は 自動で 上のほうに 出てきます。</p>
+    よく使った言葉は 自動で 上のほうに 出てきます。<br>
+    「じぶん」のたなで、言いたいことを 足せます（この端末に おぼえます）。</p>
   </details>
 </div>
 
@@ -119,82 +135,160 @@
 <script>
 "use strict";
 /* ========================================================
-   こえのかわり — のどが痛いときの、うつ→よみあげ
-   ・打った文字から、言いそうな文を予測して出す
-   ・よく使ったものは 自動で 上にくる（この端末におぼえる）
+   こえのかわり — うつと よみあげる（のどが痛いとき用）
+   ゆまの ふだんの話しことばで そろえてある。
+   ・打った文字から 言いそうな文を予測
+   ・使うほど 上にくる（この端末におぼえる）
    ・相手に見せる「大きい字」つき
    ======================================================== */
 const $ = id => document.getElementById(id);
 const tx = $("tx");
+const PIN = "のどが 痛くて 声が 出せません。これで 話します。";
 
-/* ---- 言いそうな文（よみ＝ひらがなでも ひっかかるように） ---- */
-const P = (t, y, g) => ({ t, y: y || "", g: g || "ふだん" });
+/* ---- ゆまが 言いそうなこと（よみ＝ひらがなでも ひっかかる） ---- */
+const P = (t, y, g) => ({ t, y: y || "", g: g || "へんじ" });
 const BANK = [
-  // いま いちばん いるもの
-  P("のどが 痛くて 声が 出せません。これで 話します。", "のどがいたくてこえがだせません", "いま"),
-  P("ごめんね、声が 出なくて。", "ごめんねこえがでなくて", "いま"),
+  // ── いま（のど）
+  P(PIN, "のどがいたくてこえがだせません", "いま"),
+  P("ごめんね、声が 出なくて", "ごめんねこえがでなくて", "いま"),
   P("のど 痛い", "のどいたい", "いま"),
   P("しゃべれない", "しゃべれない", "いま"),
+  P("まだ ガラガラ", "まだがらがら", "いま"),
+  P("声 戻ってきた", "こえもどってきた", "いま"),
+  P("今日は 筆談で ごめんね", "きょうはひつだんでごめんね", "いま"),
   P("お水 ちょうだい", "おみずちょうだい", "いま"),
-  P("あたたかいもの ほしい", "あたたかいものほしい", "いま"),
+  P("あたたかいもの 飲みたい", "あたたかいもののみたい", "いま"),
   P("のど飴 ある？", "のどあめある", "いま"),
-  P("病院 行ってくる", "びょういんいってくる", "いま"),
+  P("はちみつ 入れて", "はちみついれて", "いま"),
   P("薬 のんだ", "くすりのんだ", "いま"),
+  P("耳鼻科 行ってくる", "じびかいってくる", "いま"),
   P("ちょっと 休む", "ちょっとやすむ", "いま"),
   P("今日は 声 使えない", "きょうはこえつかえない", "いま"),
-  P("あとで LINEする", "あとでらいんする", "いま"),
-  P("書いて 伝えるね", "かいてつたえるね", "いま"),
+  P("あとで LINEするね", "あとでらいんするね", "いま"),
 
-  // 返事
-  P("はい", "はい", "へんじ"), P("うん", "うん", "へんじ"),
-  P("いいえ", "いいえ", "へんじ"), P("ちがう", "ちがう", "へんじ"),
-  P("ありがとう", "ありがとう", "へんじ"), P("ありがとうございます", "ありがとうございます", "へんじ"),
-  P("ごめんね", "ごめんね", "へんじ"), P("すみません", "すみません", "へんじ"),
-  P("おねがい", "おねがい", "へんじ"), P("だいじょうぶ", "だいじょうぶ", "へんじ"),
-  P("わかった", "わかった", "へんじ"), P("わからない", "わからない", "へんじ"),
-  P("ちょっと 待って", "ちょっとまって", "へんじ"), P("もう いちど いって", "もういちどいって", "へんじ"),
-  P("そうそう", "そうそう", "へんじ"), P("いいね", "いいね", "へんじ"),
-  P("あとでね", "あとでね", "へんじ"), P("やめとく", "やめとく", "へんじ"),
-  P("おはよう", "おはよう", "へんじ"), P("おつかれさま", "おつかれさま", "へんじ"),
+  // ── へんじ（ゆまの口調）
+  P("うん", "うん", "へんじ"), P("そだね", "そだね", "へんじ"),
+  P("おっけー", "おっけー", "へんじ"), P("了解", "りょうかい", "へんじ"),
+  P("ちがう", "ちがう", "へんじ"), P("ううん", "ううん", "へんじ"),
+  P("ありがとー", "ありがとー", "へんじ"), P("ありがとうございます", "ありがとうございます", "へんじ"),
+  P("ごめーん", "ごめーん", "へんじ"), P("すみません", "すみません", "へんじ"),
+  P("おつかれー", "おつかれー", "へんじ"), P("おつかれさまです", "おつかれさまです", "へんじ"),
+  P("たしかに", "たしかに", "へんじ"), P("いいね", "いいね", "へんじ"),
+  P("うれしい", "うれしい", "へんじ"), P("たすかる", "たすかる", "へんじ"),
+  P("ほんと？", "ほんと", "へんじ"), P("まじか", "まじか", "へんじ"),
+  P("だいじょうぶ", "だいじょうぶ", "へんじ"), P("わかった", "わかった", "へんじ"),
+  P("わからん", "わからん", "へんじ"), P("ちょっと 待って", "ちょっとまって", "へんじ"),
+  P("もう いちど いって", "もういちどいって", "へんじ"),
+  P("あとでね", "あとでね", "へんじ"), P("おねがい", "おねがい", "へんじ"),
+  P("やめとく", "やめとく", "へんじ"), P("考えとく", "かんがえとく", "へんじ"),
+  P("おはよう", "おはよう", "へんじ"), P("おやすみ", "おやすみ", "へんじ"),
   P("いってきます", "いってきます", "へんじ"), P("ただいま", "ただいま", "へんじ"),
-  P("おやすみ", "おやすみ", "へんじ"),
 
-  // たのみごと
-  P("これ とって", "これとって", "たのむ"),
-  P("手伝って ほしい", "てつだってほしい", "たのむ"),
-  P("ちょっと きて", "ちょっときて", "たのむ"),
-  P("電話 かわりに して", "でんわかわりにして", "たのむ"),
-  P("先に 行ってて", "さきにいってて", "たのむ"),
-  P("車 出してくれる？", "くるまだしてくれる", "たのむ"),
-  P("買ってきて ほしいものが あるの", "かってきてほしいものがあるの", "たのむ"),
-  P("持ってるよ", "もってるよ", "たのむ"),
-  P("おなか すいた", "おなかすいた", "たのむ"),
+  // ── おうち
+  P("ごはん できた？", "ごはんできた", "おうち"),
+  P("お腹 すいた", "おなかすいた", "おうち"),
+  P("先に 食べてて", "さきにたべてて", "おうち"),
+  P("あとで 食べる", "あとでたべる", "おうち"),
+  P("お風呂 入るね", "おふろはいるね", "おうち"),
+  P("もう 寝る", "もうねる", "おうち"),
+  P("まだ 起きてる", "まだおきてる", "おうち"),
+  P("洗濯 回した", "せんたくまわした", "おうち"),
+  P("ゴミ 出しといて", "ごみだしといて", "おうち"),
+  P("買い物 行ってくる", "かいものいってくる", "おうち"),
+  P("なんか いる？", "なんかいる", "おうち"),
+  P("車 借りるね", "くるまかりるね", "おうち"),
+  P("これ とって", "これとって", "おうち"),
+  P("ちょっと きて", "ちょっときて", "おうち"),
+  P("手伝って ほしい", "てつだってほしい", "おうち"),
+  P("助かった、ありがとう", "たすかったありがとう", "おうち"),
+  P("おじいちゃんの ところ 行ってくる", "おじいちゃんのところいってくる", "おうち"),
+  P("おばあちゃんに 電話した", "おばあちゃんにでんわした", "おうち"),
+  P("施設に 連絡しとく", "しせつにれんらくしとく", "おうち"),
+  P("迎えに 行ってくる", "むかえにいってくる", "おうち"),
+  P("筋トレ してくる", "きんとれしてくる", "おうち"),
+  P("今日は 休む日にする", "きょうはやすむひにする", "おうち"),
 
-  // しごと
-  P("おつかれさまです", "おつかれさまです", "しごと"),
-  P("今日は 声が 出ないので、チャットで お願いします。", "きょうはこえがでないのでちゃっとでおねがいします", "しごと"),
-  P("打ち合わせ、ずらしても いいですか", "うちあわせずらしてもいいですか", "しごと"),
-  P("メールで 送ります", "めーるでおくります", "しごと"),
-  P("あとで 確認します", "あとでかくにんします", "しごと"),
+  // ── しごと
+  P("今日は 声が 出ないので、チャットで お願いします", "きょうはこえがでないのでちゃっとでおねがいします", "しごと"),
+  P("打ち合わせ 何時から？", "うちあわせなんじから", "しごと"),
+  P("日にち ずらせますか", "ひにちずらせますか", "しごと"),
+  P("オンラインで いいですか", "おんらいんでいいですか", "しごと"),
+  P("資料 送りました", "しりょうおくりました", "しごと"),
+  P("あとで 確認して 返します", "あとでかくにんしてかえします", "しごと"),
+  P("請求書 送りました", "せいきゅうしょおくりました", "しごと"),
+  P("見積もり つくりますね", "みつもりつくりますね", "しごと"),
+  P("納品 しました", "のうひんしました", "しごと"),
+  P("締め切り いつでしたっけ", "しめきりいつでしたっけ", "しごと"),
   P("かしこまりました", "かしこまりました", "しごと"),
   P("少々 お待ちください", "しょうしょうおまちください", "しごと"),
-  P("ありがとうございました", "ありがとうございました", "しごと"),
   P("よろしく おねがいします", "よろしくおねがいします", "しごと"),
-  P("今日は 休ませてください", "きょうはやすませてください", "しごと"),
-  P("日にちを 変えられますか", "ひにちをかえられますか", "しごと"),
-  P("資料は あとで 送ります", "しりょうはあとでおくります", "しごと"),
-  P("請求書 送りました", "せいきゅうしょおくりました", "しごと"),
-  P("稽古、今日は 見学します", "けいこきょうはけんがくします", "しごと"),
-  P("声を 使わない 練習を します", "こえをつかわないれんしゅうをします", "しごと"),
+  P("ありがとうございました", "ありがとうございました", "しごと"),
+  P("エグゼの件です", "えぐぜのけんです", "しごと"),
+  P("みらいいの件です", "みらいいのけんです", "しごと"),
+  P("ボイストランドの件です", "ぼいすとらんどのけんです", "しごと"),
+  P("世界樹の日の件です", "せかいじゅのひのけんです", "しごと"),
+  P("商工会に 行ってきます", "しょうこうかいにいってきます", "しごと"),
+  P("信金に 寄ってきます", "しんきんによってきます", "しごと"),
+  P("補助金の 書類 出しました", "ほじょきんのしょるいだしました", "しごと"),
+  P("領収書 もらっておきます", "りょうしゅうしょもらっておきます", "しごと"),
+  P("セミナーの 準備 してます", "せみなーのじゅんびしてます", "しごと"),
+  P("今日は 司会です", "きょうはしかいです", "しごと"),
+  P("収録 あります", "しゅうろくあります", "しごと"),
+  P("スライド なおします", "すらいどなおします", "しごと"),
+  P("トバに やってもらう", "とばにやってもらう", "しごと"),
+
+  // ── げきだん
+  P("稽古 行ってくる", "けいこいってくる", "げきだん"),
+  P("今日 稽古ある？", "きょうけいこある", "げきだん"),
+  P("本番 いつだっけ", "ほんばんいつだっけ", "げきだん"),
+  P("台本 持ってきた", "だいほんもってきた", "げきだん"),
+  P("衣装 どうする？", "いしょうどうする", "げきだん"),
+  P("通し やりますか", "とおしやりますか", "げきだん"),
+  P("今日は 声が 出ないので 動きだけ やります", "きょうはこえがでないのでうごきだけやります", "げきだん"),
+  P("今日は 見学します", "きょうはけんがくします", "げきだん"),
+  P("少し 早く 上がります", "すこしはやくあがります", "げきだん"),
+  P("そこ もう いちど お願いします", "そこもういちどおねがいします", "げきだん"),
+
+  // ── そと
+  P("今から 出る", "いまからでる", "そと"),
+  P("あと 10分くらい", "あとじゅっぷんくらい", "そと"),
+  P("着いたよ", "ついたよ", "そと"),
+  P("着いたら 連絡する", "ついたられんらくする", "そと"),
+  P("遅れそう、ごめん", "おくれそうごめん", "そと"),
+  P("先に 行ってて", "さきにいってて", "そと"),
+  P("駐車場 どこですか", "ちゅうしゃじょうどこですか", "そと"),
+  P("高速 のるね", "こうそくのるね", "そと"),
+  P("ガソリン 入れてく", "がそりんいれてく", "そと"),
+  P("電車で 行く", "でんしゃでいく", "そと"),
+  P("迎えに 来てもらえる？", "むかえにきてもらえる", "そと"),
+  P("コンビニ 寄っていい？", "こんびによっていい", "そと"),
+  P("道 まちがえた", "みちまちがえた", "そと"),
+  P("ここで 待ってる", "ここでまってる", "そと"),
+  P("お会計 おねがいします", "おかいけいおねがいします", "そと"),
+  P("これ ください", "これください", "そと"),
+  P("袋 だいじょうぶです", "ふくろだいじょうぶです", "そと"),
+
+  // ── ひと（呼びかけ・取り次ぎ）
+  P("かなちゃん", "かなちゃん", "ひと"),
+  P("みっちーさん", "みっちーさん", "ひと"),
+  P("みけさん", "みけさん", "ひと"),
+  P("ろまんさん", "ろまんさん", "ひと"),
+  P("かなちゃんに 聞いてみる", "かなちゃんにきいてみる", "ひと"),
+  P("みっちーさんに 連絡しとく", "みっちーさんにれんらくしとく", "ひと"),
+  P("みんなに 共有しとくね", "みんなにきょうゆうしとくね", "ひと"),
+  P("電話 かわりに してくれる？", "でんわかわりにしてくれる", "ひと"),
+  P("〇〇さんから 電話 きてたよ", "からでんわきてたよ", "ひと"),
+  P("先に 伝えといて", "さきにつたえといて", "ひと"),
 ];
 
 /* ---- おぼえておく（この端末だけ） ---- */
-const KEY = "koe_use", HKEY = "koe_hist", SKEY = "koe_set";
-let use = {}, hist = [], set = { rate: 1, pitch: 1, voice: "", autoBig: false };
-try{ use = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; }catch(e){}
-try{ hist = JSON.parse(localStorage.getItem(HKEY) || "[]") || []; }catch(e){}
-try{ Object.assign(set, JSON.parse(localStorage.getItem(SKEY) || "{}")); }catch(e){}
+const KEY = "koe_use", HKEY = "koe_hist", SKEY = "koe_set", MKEY = "koe_mine";
+let use = {}, hist = [], mine = [], set = { rate: 1, pitch: 1, voice: "", autoBig: false };
+const load = (k, d) => { try{ return JSON.parse(localStorage.getItem(k) || "null") ?? d; }catch(e){ return d; } };
+use = load(KEY, {}); hist = load(HKEY, []); mine = load(MKEY, []);
+Object.assign(set, load(SKEY, {}));
 const save = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+const all = () => BANK.concat(mine.map(t => ({ t, y: "", g: "じぶん" })));
 
 /* ---- よみあげ ---- */
 let voices = [], ready = false;
@@ -202,7 +296,7 @@ function pickVoices(){
   voices = (speechSynthesis.getVoices() || []).filter(v => /^ja/i.test(v.lang));
   if(!voices.length) voices = speechSynthesis.getVoices() || [];
   const sel = $("voice"); sel.innerHTML = "";
-  voices.forEach((v, i) => {
+  voices.forEach(v => {
     const o = document.createElement("option");
     o.value = v.voiceURI; o.textContent = v.name + (/^ja/i.test(v.lang) ? "" : ` (${v.lang})`);
     sel.appendChild(o);
@@ -210,8 +304,8 @@ function pickVoices(){
   if(set.voice && voices.some(v => v.voiceURI === set.voice)) sel.value = set.voice;
   ready = voices.length > 0;
   $("st").textContent = ready ? "よみあげ つかえます" : "こえが 見つかりません";
-  if(ready) $("warn").hidden = true;          // あとから 声が 見つかったら 注意書きは 消す
-  else showWarn("この ブラウザでは 声が 見つかりませんでした。Chrome や Safari で ひらくと 読めることが 多いです。画面の 大きい字（👀）は そのまま つかえます。");
+  if(ready) $("warn").hidden = true;
+  else showWarn("この ブラウザでは 声が 見つかりませんでした。Chrome や Safari で ひらくと 読めることが 多いです。大きい字（👀）は そのまま つかえます。");
 }
 function showWarn(t){ const w = $("warn"); w.textContent = t; w.hidden = false; }
 if("speechSynthesis" in window){
@@ -222,13 +316,12 @@ if("speechSynthesis" in window){
   $("st").textContent = "よみあげ 非対応";
   showWarn("この ブラウザは 読み上げに 対応していません。Chrome で ひらいてください。大きい字（👀）は つかえます。");
 }
-
 function speak(text){
   const t = (text || "").trim();
   if(!t) return;
   remember(t);
   if(set.autoBig) bigShow(t);
-  if(!("speechSynthesis" in window)) { bigShow(t); return; }
+  if(!("speechSynthesis" in window)){ bigShow(t); return; }
   try{
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(t);
@@ -244,40 +337,38 @@ function remember(t){
   drawHist(); drawTiles();
 }
 
-/* ---- 大きい字（相手に見せる） ---- */
+/* ---- 大きい字 ---- */
 function bigShow(t){ $("showTx").textContent = t; $("show").classList.add("on"); }
 $("show").addEventListener("click", () => $("show").classList.remove("on"));
 
 /* ---- 予測 ---- */
-const norm = s => s.replace(/\s/g, "")
-  .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));   // カタカナ→ひらがな
+const norm = s => s.replace(/\s/g, "").replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 function score(p, q){
   const t = norm(p.t), y = norm(p.y), n = use[p.t] || 0;
-  if(t.startsWith(q) || y.startsWith(q)) return 100 + n;
-  if(t.includes(q) || y.includes(q)) return 50 + n;
+  if(t.startsWith(q) || (y && y.startsWith(q))) return 100 + n;
+  if(t.includes(q) || (y && y.includes(q))) return 50 + n;
   return 0;
 }
 function drawSug(){
-  const q = norm(tx.value);
-  const box = $("sug"); box.innerHTML = "";
-  if(!q){ return; }
-  const hit = BANK.map(p => [score(p, q), p]).filter(a => a[0] > 0)
-    .sort((a, b) => b[0] - a[0]).slice(0, 8);
-  // うったそのものも 候補の先頭に（予測に無い言葉のため）
-  for(const [, p] of hit){
-    const b = document.createElement("button");
-    b.className = "sg"; b.textContent = p.t;
-    b.addEventListener("click", () => { tx.value = p.t; drawSug(); speak(p.t); });
-    box.appendChild(b);
-  }
+  const q = norm(tx.value), box = $("sug");
+  box.innerHTML = "";
+  if(!q) return;
+  all().map(p => [score(p, q), p]).filter(a => a[0] > 0)
+    .sort((a, b) => b[0] - a[0]).slice(0, 8)
+    .forEach(([, p]) => {
+      const b = document.createElement("button");
+      b.className = "sg"; b.textContent = p.t;
+      b.addEventListener("click", () => { tx.value = p.t; drawSug(); speak(p.t); });
+      box.appendChild(b);
+    });
 }
 tx.addEventListener("input", drawSug);
 tx.addEventListener("keydown", e => {
   if(e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); speak(tx.value); }
 });
 
-/* ---- よく つかう（たな） ---- */
-const GROUPS = ["いま", "へんじ", "たのむ", "しごと"];
+/* ---- たな ---- */
+const GROUPS = ["いま", "へんじ", "おうち", "しごと", "げきだん", "そと", "ひと", "じぶん"];
 let group = "いま";
 function drawTabs(){
   const box = $("tabs"); box.innerHTML = "";
@@ -290,16 +381,39 @@ function drawTabs(){
 }
 function drawTiles(){
   const box = $("tiles"); box.innerHTML = "";
-  const list = BANK.filter(p => p.g === group)
-    .sort((a, b) => (use[b.t] || 0) - (use[a.t] || 0));   // よく使うものが 上に
+  $("addBox").hidden = group !== "じぶん";
+  const list = all().filter(p => p.g === group)
+    .sort((a, b) => (use[b.t] || 0) - (use[a.t] || 0));
+  if(group === "じぶん" && !list.length){
+    box.innerHTML = `<div style="color:var(--dim);font-size:14px;grid-column:1/-1">
+      まだ ありません。下の らんに 入れて ＋ で ふやせます。</div>`;
+  }
   for(const p of list){
     const b = document.createElement("button");
-    b.className = "tile" + (p.t.length > 14 ? " big" : "");
+    b.className = "tile" + (p.t.length > 13 ? " big" : "");
     b.textContent = p.t;
     b.addEventListener("click", () => speak(p.t));
+    if(group === "じぶん"){
+      const x = document.createElement("span");
+      x.className = "x"; x.textContent = "✕";
+      x.addEventListener("click", ev => {
+        ev.stopPropagation();
+        mine = mine.filter(t => t !== p.t); save(MKEY, mine); drawTiles();
+      });
+      b.appendChild(x);
+    }
     box.appendChild(b);
   }
 }
+function addMine(){
+  const t = $("addTx").value.trim();
+  if(!t || mine.indexOf(t) >= 0){ $("addTx").value = ""; return; }
+  mine.unshift(t); save(MKEY, mine);
+  $("addTx").value = ""; group = "じぶん"; drawTabs(); drawTiles();
+}
+$("addGo").addEventListener("click", addMine);
+$("addTx").addEventListener("keydown", e => { if(e.key === "Enter" && !e.isComposing) addMine(); });
+
 function drawHist(){
   const box = $("hist"); box.innerHTML = "";
   if(!hist.length){ box.innerHTML = `<div style="color:var(--dim);font-size:14px">まだ ありません</div>`; return; }
@@ -312,6 +426,7 @@ function drawHist(){
 }
 
 /* ---- ボタン ---- */
+$("pin").addEventListener("click", () => speak(PIN));
 $("say").addEventListener("click", () => speak(tx.value));
 $("big").addEventListener("click", () => { const t = tx.value.trim(); if(t) bigShow(t); });
 $("clr").addEventListener("click", () => { tx.value = ""; drawSug(); tx.focus(); });
