@@ -37,9 +37,10 @@
     box-shadow:0 4px 0 rgba(181,101,93,.35) }
   #pin span{ display:block; font-size:11px; font-weight:800; opacity:.85; letter-spacing:.1em; margin-bottom:3px }
 
-  .box{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:10px; margin-bottom:10px }
+  .box{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px }
   textarea{ width:100%; border:none; outline:none; resize:none; background:transparent; color:var(--ink);
-    font-family:inherit; font-size:21px; line-height:1.6; min-height:64px; padding:4px 6px }
+    font-family:inherit; font-size:25px; line-height:1.55; min-height:132px; max-height:44vh; padding:6px 6px 2px;
+    overflow-y:auto }
   textarea::placeholder{ color:var(--dim) }
   .row{ display:flex; gap:8px; margin-top:6px }
   .go{ flex:1; background:var(--rose); border-color:var(--rose-d); color:#fff; font-size:19px; padding:15px 12px }
@@ -97,7 +98,7 @@
   <button id="pin"><span>まず これ</span>のどが 痛くて 声が 出せません。これで 話します。</button>
 
   <div class="box">
-    <textarea id="tx" rows="2" placeholder="ここに うつと、よみあげます" autocomplete="off" autocapitalize="off"></textarea>
+    <textarea id="tx" rows="4" placeholder="ここに うつと、よみあげます" autocomplete="off" autocapitalize="off"></textarea>
     <div class="row">
       <button class="go" id="say">🔊　よむ</button>
       <button class="mini" id="big" title="相手に見せる">👀</button>
@@ -358,11 +359,18 @@ function drawSug(){
     .forEach(([, p]) => {
       const b = document.createElement("button");
       b.className = "sg"; b.textContent = p.t;
-      b.addEventListener("click", () => { tx.value = p.t; drawSug(); speak(p.t); });
+      b.addEventListener("click", () => { tx.value = p.t; grow(); drawSug(); speak(p.t); });
       box.appendChild(b);
     });
 }
-tx.addEventListener("input", drawSug);
+/** 打つほど たてに ひろがる（せますぎた ので） */
+function grow(){
+  tx.style.height = "auto";
+  const max = Math.round(window.innerHeight * 0.44);
+  tx.style.height = Math.min(max, Math.max(132, tx.scrollHeight)) + "px";
+}
+tx.addEventListener("input", () => { grow(); drawSug(); });
+addEventListener("resize", grow);
 tx.addEventListener("keydown", e => {
   if(e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); speak(tx.value); }
 });
@@ -429,7 +437,7 @@ function drawHist(){
 $("pin").addEventListener("click", () => speak(PIN));
 $("say").addEventListener("click", () => speak(tx.value));
 $("big").addEventListener("click", () => { const t = tx.value.trim(); if(t) bigShow(t); });
-$("clr").addEventListener("click", () => { tx.value = ""; drawSug(); tx.focus(); });
+$("clr").addEventListener("click", () => { tx.value = ""; grow(); drawSug(); tx.focus(); });
 
 /* ---- せってい ---- */
 function bind(id, key, out){
@@ -444,7 +452,7 @@ $("voice").addEventListener("change", () => { set.voice = $("voice").value; save
 $("autoBig").checked = !!set.autoBig;
 $("autoBig").addEventListener("change", () => { set.autoBig = $("autoBig").checked; save(SKEY, set); });
 
-drawTabs(); drawTiles(); drawHist();
+drawTabs(); drawTiles(); drawHist(); grow();
 tx.focus();
 </script>
 </body>
