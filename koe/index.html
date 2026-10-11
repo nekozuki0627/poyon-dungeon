@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#CF7D74">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="こえ">
 <title>こえのかわり</title>
 <style>
   /* Arilloのローズ #CF7D74 を基調。点線罫線・角丸カード */
@@ -54,13 +59,15 @@
     box-shadow:0 4px 0 rgba(181,101,93,.35) }
   #pin span{ display:block; font-size:11px; font-weight:800; opacity:.85; letter-spacing:.1em; margin-bottom:3px }
 
-  .box{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px }
+  .box{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:10px; margin-bottom:10px;
+    position:sticky; top:calc(env(safe-area-inset-top, 0px) + 4px); z-index:30;
+    box-shadow:0 6px 14px rgba(89,50,45,.10) }
   textarea{ width:100%; border:none; outline:none; resize:none; background:transparent; color:var(--ink);
-    font-family:inherit; font-size:32px; font-weight:600; line-height:1.5; min-height:168px; max-height:46vh;
-    padding:6px 6px 2px; overflow-y:auto }
+    font-family:inherit; font-size:28px; font-weight:600; line-height:1.45; min-height:84px; max-height:30vh;
+    padding:4px 6px 0; overflow-y:auto }
   textarea::placeholder{ color:var(--dim); font-size:20px; font-weight:500 }
   .row{ display:flex; gap:8px; margin-top:6px }
-  .go{ flex:1; background:var(--rose); border-color:var(--rose-d); color:#fff; font-size:19px; padding:15px 12px }
+  .go{ flex:1; background:var(--rose); border-color:var(--rose-d); color:#fff; font-size:19px; padding:14px 12px }
   .mini{ padding:11px 14px }
 
   #sug{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px }
@@ -117,7 +124,7 @@
   <button id="pin"><span>まず これ</span>声の 出しすぎで、声帯が 腫れていて 痛くて 話せません。</button>
 
   <div class="box">
-    <textarea id="tx" rows="4" placeholder="ここに うつ（Enterで 改行できます）" autocomplete="off" autocapitalize="off"></textarea>
+    <textarea id="tx" rows="2" placeholder="ここに うつ（Enterで 改行できます）" autocomplete="off" autocapitalize="off"></textarea>
     <div class="row">
       <button class="go" id="say">🔊　よむ</button>
       <button class="mini" id="big" title="相手に見せる">👀</button>
@@ -484,11 +491,14 @@ function drawSug(){
 /** 打つほど たてに ひろがる（せますぎた ので） */
 function grow(){
   tx.style.height = "auto";
-  const max = Math.round(window.innerHeight * 0.46);
-  tx.style.height = Math.min(max, Math.max(168, tx.scrollHeight)) + "px";
+  // キーボードが 出ているときは そのぶん 低くして、よむボタンを 隠さない
+  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  const max = Math.max(84, Math.round(vh * 0.30));
+  tx.style.height = Math.min(max, Math.max(84, tx.scrollHeight)) + "px";
 }
 tx.addEventListener("input", () => { grow(); drawSug(); });
 addEventListener("resize", grow);
+if(window.visualViewport) window.visualViewport.addEventListener("resize", grow);
 tx.addEventListener("keydown", e => {
   // Enter は ふつうに 改行。よむのは ボタン（いそぐときは Ctrl+Enter）
   if(e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing){ e.preventDefault(); speak(tx.value); }
@@ -589,6 +599,10 @@ function closeScenes(){ $("scenes").classList.remove("on"); }
 $("fab").addEventListener("click", openScenes);
 $("shClose").addEventListener("click", closeScenes);
 $("scenes").addEventListener("click", e => { if(e.target.id === "scenes") closeScenes(); });
+
+if("serviceWorker" in navigator) addEventListener("load", () => {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+});
 
 drawTabs(); drawTiles(); drawHist(); grow();
 tx.focus();
