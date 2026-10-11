@@ -35,10 +35,14 @@
     box-shadow:0 6px 16px rgba(89,50,45,.3); display:flex; flex-direction:column; align-items:center; gap:1px }
   #fab i{ font-style:normal; font-size:21px; line-height:1.1 }
   #fab b{ font-size:13px; font-weight:800 }
-  #scenes{ position:fixed; inset:0; z-index:45; display:none; align-items:flex-end;
+  #scenes, #voices{ position:fixed; inset:0; z-index:45; display:none; align-items:flex-end;
     background:rgba(58,40,38,.45) }
-  #scenes.on{ display:flex }
-  #scenes .sheet{ width:100%; max-width:620px; margin:0 auto; background:var(--bg);
+  #scenes.on, #voices.on{ display:flex }
+  #vList{ display:flex; flex-direction:column; gap:7px; max-height:52vh; overflow-y:auto }
+  #vList button{ width:100%; text-align:left; font-size:16px; padding:13px 14px }
+  #vList button.on{ background:var(--rose); border-color:var(--rose-d); color:#fff }
+  .sh-hint{ font-size:12px; color:var(--dim); margin:10px 2px 0; line-height:1.6 }
+  #scenes .sheet, #voices .sheet{ width:100%; max-width:620px; margin:0 auto; background:var(--bg);
     border-radius:22px 22px 0 0; padding:16px 14px calc(16px + env(safe-area-inset-bottom));
     box-shadow:0 -8px 24px rgba(0,0,0,.18) }
   .sh-ttl{ font-size:12px; font-weight:800; color:var(--dim); letter-spacing:.1em; margin-bottom:10px;
@@ -47,7 +51,9 @@
 
   h1{ font-size:17px; font-weight:800; margin:2px 0 8px; color:var(--rose);
     display:flex; align-items:center; gap:8px }
-  h1 small{ font-size:12px; font-weight:700; color:var(--dim); margin-left:auto }
+  #voiceBtn{ margin-left:auto; font-size:13px; padding:7px 12px; border-radius:999px; max-width:62%;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  #voiceBtn b{ font-weight:800 }
 
   button{ font-family:inherit; font-weight:800; border-radius:13px; border:2px solid var(--line);
     background:var(--card); color:var(--ink); padding:11px 12px; font-size:15px; cursor:pointer }
@@ -117,7 +123,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>こえのかわり <small id="st">よみあげ じゅんび中…</small></h1>
+  <h1>こえのかわり <button id="voiceBtn">🔊 <b id="voiceNm">こえ</b></button></h1>
 
   <div id="warn" class="warn" hidden></div>
 
@@ -157,6 +163,13 @@
 </div>
 
 <button id="fab"><i id="fabIc">💬</i><b id="fabTx">ふだん</b></button>
+<div id="voices"><div class="sheet">
+  <div class="sh-ttl">こえを えらぶ（おすと ためし読みします）</div>
+  <div id="vList"></div>
+  <div class="sh-hint" id="vHint"></div>
+  <button class="sh-close" id="vClose">とじる</button>
+</div></div>
+
 <div id="scenes"><div class="sheet">
   <div class="sh-ttl">ばめんを えらぶ</div>
   <div class="tabs" id="tabs"></div>
@@ -429,7 +442,8 @@ function pickVoices(){
   });
   if(set.voice && voices.some(v => v.voiceURI === set.voice)) sel.value = set.voice;
   ready = voices.length > 0;
-  $("st").textContent = ready ? "よみあげ つかえます" : "こえが 見つかりません";
+  showVoiceName();
+  if($("voices").classList.contains("on")) drawVoices();
   if(ready) $("warn").hidden = true;
   else showWarn("この ブラウザでは 声が 見つかりませんでした。Chrome や Safari で ひらくと 読めることが 多いです。大きい字（👀）は そのまま つかえます。");
 }
@@ -439,7 +453,6 @@ if("speechSynthesis" in window){
   speechSynthesis.addEventListener("voiceschanged", pickVoices);
   setTimeout(pickVoices, 600);
 }else{
-  $("st").textContent = "よみあげ 非対応";
   showWarn("この ブラウザは 読み上げに 対応していません。Chrome で ひらいてください。大きい字（👀）は つかえます。");
 }
 function speak(text){
@@ -593,6 +606,44 @@ bind("pitch", "pitch", "pitchV");
 $("voice").addEventListener("change", () => { set.voice = $("voice").value; save(SKEY, set); });
 $("autoBig").checked = !!set.autoBig;
 $("autoBig").addEventListener("change", () => { set.autoBig = $("autoBig").checked; save(SKEY, set); });
+
+/** こえの 一覧 */
+function drawVoices(){
+  const box = $("vList"); box.innerHTML = "";
+  const cur = $("voice").value;
+  if(!voices.length){
+    box.innerHTML = `<div style="color:var(--dim);font-size:14px">こえが 見つかりません</div>`;
+  }
+  voices.forEach(v => {
+    const b = document.createElement("button");
+    b.className = v.voiceURI === cur ? "on" : "";
+    b.textContent = v.name.replace(/^Microsoft /, "").replace(/ - Japanese \(Japan\)$/, "")
+      + (/^ja/i.test(v.lang) ? "" : ` (${v.lang})`);
+    b.addEventListener("click", () => {
+      $("voice").value = v.voiceURI; set.voice = v.voiceURI; save(SKEY, set);
+      drawVoices(); showVoiceName();
+      try{
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance("こんにちは。この こえで 話します。");
+        u.voice = v; u.lang = v.lang; u.rate = +set.rate; u.pitch = +set.pitch;
+        speechSynthesis.speak(u);
+      }catch(e){}
+    });
+    box.appendChild(b);
+  });
+  $("vHint").textContent = voices.length > 1
+    ? "ためし読みして、いいものを えらんでね。はやさ・たかさは 下の「こえの せってい」で。"
+    : "こえを ふやすには、スマホの 設定 →（ユーザー補助／言語と入力）→ 音声出力 から 音声エンジンの 声を 入れてください。";
+}
+function showVoiceName(){
+  const v = voices.find(v => v.voiceURI === $("voice").value) || voices[0];
+  $("voiceNm").textContent = v
+    ? v.name.replace(/^Microsoft /, "").replace(/ - Japanese \(Japan\)$/, "").slice(0, 10)
+    : "こえ";
+}
+$("voiceBtn").addEventListener("click", () => { drawVoices(); $("voices").classList.add("on"); });
+$("vClose").addEventListener("click", () => $("voices").classList.remove("on"));
+$("voices").addEventListener("click", e => { if(e.target.id === "voices") $("voices").classList.remove("on"); });
 
 function openScenes(){ $("scenes").classList.add("on"); }
 function closeScenes(){ $("scenes").classList.remove("on"); }
