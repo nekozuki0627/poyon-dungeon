@@ -86,6 +86,8 @@
 <div id="rot" class="sheet"><div class="inner">
   <div class="rotic">📱</div>
   <div class="ttl">よこむきに すると<br>ずっと あそびやすいよ</div>
+  <button class="go" id="rotGo">よこむきに する</button>
+  <div class="sub" id="rotNote" style="display:none">うまく まわらないときは、スマホの「画面の回転」を オンにしてね</div>
   <button class="again" id="rotOk">このまま あそぶ</button>
 </div></div>
 <div id="away" class="sheet"><div class="inner">
@@ -322,6 +324,14 @@ function rotCheck(){ pause("rot", mqP.matches && !rotOk); }
 document.getElementById("rotOk").addEventListener("pointerdown", e => {
   e.preventDefault(); e.stopPropagation();
   rotOk = true; document.body.classList.add("rotok"); rotCheck();
+});
+/* ホーム画面に入れたアプリは「たて固定」なので、スマホを倒しても まわらない（ゆま 10/16）。
+   ボタンで 全画面にして、よこむきに 固定する。おうちへ もどれば 元の たてに もどる */
+document.getElementById("rotGo").addEventListener("pointerdown", async e => {
+  e.preventDefault(); e.stopPropagation();
+  try{ if(!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: "hide" }); }catch(err){}
+  try{ await screen.orientation.lock("landscape"); }
+  catch(err){ document.getElementById("rotNote").style.display = "block"; }
 });
 if(mqP.addEventListener) mqP.addEventListener("change", rotCheck); else mqP.addListener(rotCheck);
 rotCheck();
